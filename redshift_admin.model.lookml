@@ -1,7 +1,6 @@
 # preliminaries #
 
-- connection: your_connection_here # make sure this is a connection where the database user has access to pg_admin tables
-- scoping: true
+- connection: YOUR_CONNECTION_HERE # make sure this is a connection where the database user has access to pg_admin tables
 - case_sensitive: false
 - include: '*dashboard.lookml'
 - include: '*view.lookml'
