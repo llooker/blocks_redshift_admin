@@ -21,7 +21,22 @@ explore: etl_errors {
   label: "ETL Errors"
 }
 
-explore: table_skew {}
+explore: tables {
+
+  join: recent_plan_steps {
+    sql_on: ${recent_plan_steps.table}=${tables.table} ;;
+    type: left_outer
+    relationship: one_to_many
+  }
+}
+
+explore: recent_plan_steps {
+  join: tables {
+    sql_on: ${tables.table}=${recent_plan_steps.table} ;;
+    type: left_outer
+    relationship: many_to_one
+  }
+}
 
 explore: view_definitions {
   from: pg_views

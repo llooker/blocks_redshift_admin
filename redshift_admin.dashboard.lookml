@@ -70,12 +70,12 @@
     title: 'Table Architecture (Distribution, Sort, and Skew)'
     type: table
     model: YOUR_MODEL_NAME
-    explore: table_skew
-    dimensions: [table_skew.schema, table_skew.table, table_skew.encoded, table_skew.rows_in_table,
-      table_skew.size, table_skew.sortkey, table_skew.distribution_style, table_skew.skew_rows]
+    explore: tables
+    dimensions: [tables.schema, tables.table, tables.encoded, tables.rows_in_table,
+      tables.size, tables.sortkey, tables.distribution_style, tables.skew_rows]
     filters:
-      table_skew.skew_rows: NOT NULL
-    sorts: [table_skew.skew_rows desc]
+      tables.skew_rows: NOT NULL
+    sorts: [tables.skew_rows desc]
     show_view_names: true
     show_row_numbers: true
     width: 12
