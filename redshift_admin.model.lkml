@@ -5,9 +5,9 @@ connection: "YOUR_CONNECTION_HERE"
 
 case_sensitive: no
 
-include: "*dashboard"
+include: "redshift_*dashboard"
 
-include: "*view"
+include: "redshift_*view"
 
 # views to explore—i.e., "base views" #
 
