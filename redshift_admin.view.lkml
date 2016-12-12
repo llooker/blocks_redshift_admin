@@ -357,17 +357,17 @@ view: data_loads {
 }
 
 view: recent_plan_steps {
-  #Recent is last 1000 queries
+  #Recent is last 1000 queries (but not in sync with other recent_ PDTs with the same condition)
   derived_table: {
     # Insert into PDT because redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
-    persist_for: "1 hour"
+    persist_for: "2 hours"
     sql:
         SELECT
         query, nodeid,
-        substring(regexp_substr(plannode, 'XN ([A-Z][a-z]+ ?)+'),3) as oper,
-        substring(regexp_substr(plannode, 'DS_[A-Z_]+'),0) as dist,
-        substring(info from 1 for 240) as info,
-        substring(regexp_substr(plannode,' on [\._a-zA-Z0-9]+'),5) as tbl,
+        substring(regexp_substr(plannode, 'XN ([A-Z][a-z]+ ?)+'),3) as operation,
+        substring(regexp_substr(plannode, 'DS_[A-Z_]+'),0) as network_distribution_type,
+        substring(info from 1 for 240) as operation_arguments,
+        substring(regexp_substr(plannode,' on [\._a-zA-Z0-9]+'),5) as "table",
         substring(regexp_substr(plannode,' rows=[0-9]+'),7) as rows,
         substring(regexp_substr(plannode,' width=[0-9]+'),8) as width,
         substring(regexp_substr(plannode,'\\(cost=[0-9]+\\.[0-9][0-9]'),7) as cost_lo,
@@ -375,7 +375,7 @@ view: recent_plan_steps {
       FROM stl_explain
       WHERE stl_explain.query>(SELECT max(query)-1000 FROM stl_explain)
       ORDER BY query, nodeid;;
-    distribution: "tbl"
+    distribution: "table"
   }
   dimension: query {
     sql: ${TABLE}.query ;;
@@ -390,34 +390,34 @@ view: recent_plan_steps {
     primary_key: yes
     hidden: yes
   }
-  dimension:oper {
+  dimension: operation {
     label: "Operation"
-    sql: ${TABLE}.oper ;;
+    sql: ${TABLE}.operation ;;
     type: "string"
   }
-  dimension:dist {
+  dimension: network_distribution_type {
     label: "Distribution style"
-    sql: ${TABLE}.dist ;;
+    sql: ${TABLE}.network_distribution_type ;;
     type: "string"
   }
   dimension: table {
     sql: ${TABLE}.tbl ;;
     type: "string"
   }
-  dimension: info {
+  dimension: operation_argument {
     label: "Operation argument"
-    sql: ${TABLE}.info ;;
+    sql: ${TABLE}.operation_argument ;;
     type: "string"
   }
   dimension: rows {
     label: "Rows out"
-    sql: ${TABLE}.rows ;;
+    sql: ${TABLE}.rows;;
     description: "Number of rows returned from this step"
     type: "number"
   }
   dimension: width {
     label: "Width out"
-    sql: ${TABLE}.width ;;
+    sql: ${TABLE}.width;;
     description: "The estimated width of the average row, in bytes, that is returned from this step"
     type: "number"
   }
@@ -441,5 +441,4 @@ view: recent_plan_steps {
     type: "sum"
     sql:  ${bytes} ;;
   }
-
 }
