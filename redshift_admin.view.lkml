@@ -362,19 +362,26 @@ view: recent_plan_steps {
     # Insert into PDT because redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
     persist_for: "2 hours"
     sql:
-        SELECT
-        query, nodeid,
+      SELECT
+        query, 
+        nodeid as step,
+        parentid as parent_step,
         substring(regexp_substr(plannode, 'XN ([A-Z][a-z]+ ?)+'),3) as operation,
         substring(regexp_substr(plannode, 'DS_[A-Z_]+'),0) as network_distribution_type,
-        substring(info from 1 for 240) as operation_arguments,
+        substring(info from 1 for 240) as operation_argument,
         substring(regexp_substr(plannode,' on [\._a-zA-Z0-9]+'),5) as "table",
-        substring(regexp_substr(plannode,' rows=[0-9]+'),7) as rows,
-        substring(regexp_substr(plannode,' width=[0-9]+'),8) as width,
-        substring(regexp_substr(plannode,'\\(cost=[0-9]+\\.[0-9][0-9]'),7) as cost_lo,
-        substring(regexp_substr(plannode,'\\.\\.[0-9]+\\.[0-9][0-9]'),3) as cost_hi
+        ('0'||COALESCE(substring(regexp_substr(plannode,' rows=[0-9]+'),7),''))::bigint as "rows",
+        ('0'||COALESCE(substring(regexp_substr(plannode,' width=[0-9]+'),8),''))::bigint as width,
+        substring(regexp_substr(plannode,'\\(cost=[0-9]+'),7) as cost_lo,
+        substring(regexp_substr(plannode,'\\.\\.[0-9]+'),3) as cost_hi,
+        CASE 
+          WHEN COALESCE(parentid,0)=0 THEN 'p' 
+          WHEN nodeid=min(nodeid) OVER (PARTITION BY query,parentid) THEN 'i'
+          ELSE 'o' END
+        as inner_outer
       FROM stl_explain
       WHERE stl_explain.query>(SELECT max(query)-1000 FROM stl_explain)
-      ORDER BY query, nodeid;;
+      ;;
     distribution: "table"
   }
   dimension: query {
