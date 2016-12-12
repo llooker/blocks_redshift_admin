@@ -24,9 +24,27 @@ view: tables {
   derived_table: {
     # Insert into PDT because redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
     persist_for: "8 hours"
-    sql: select *
+    sql: select
+        "database"::varchar,
+        "schema"::varchar,
+        "Table_id"::bigint,
+        "table"::varchar,
+        "encoded"::varchar,
+        "diststyle"::varchar,
+        "sortkey1"::varchar,
+        "max_varchar"::bigint,
+        "sortkey1_enc"::varchar,
+        "sortkey_num"::int,
+        "size"::bigint,
+        "pct_used"::numeric,
+        "empty"::numeric,
+        "unsorted"::numeric,
+        "stats_off"::numeric,
+        "tbl_rows"::bigint,
+        "skew_sortkey1"::numeric,
+        "skew_rows"::numeric
       from svv_table_info
-       ;;
+    ;;
     distribution: "table"
   }
 
