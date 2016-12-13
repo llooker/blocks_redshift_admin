@@ -374,16 +374,94 @@ view: data_loads {
   }
 }
 
-view: recent_plan_steps {
-  #Recent is last 1000 queries (but not in sync with other recent_ PDTs with the same condition)
+view: recent_queries {
+   #Recent is last "1000" queries (though IDs aren't dense for some reason, so maybe much less)
   derived_table: {
     # Insert into PDT because redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
     persist_for: "2 hours"
     sql:
-      SELECT
-        query, 
-        nodeid as step,
-        parentid as parent_step,
+      SELECT query, starttime, endtime, elapsed, substring
+      FROM SVL_QLOG
+      WHERE SVL_QLOG.query>(SELECT max(query)-1000 FROM SVL_QLOG)
+      ;;
+    distribution: "query"
+    sortkeys: ["query"]
+  }
+  dimension: query {
+    sql: ${TABLE}.query ;;
+    type: number
+    value_format_name: id
+  }
+  dimension_group: start {
+    type: time
+    convert_tz: no
+    timeframes: [raw,minute,hour,time_of_day,hour_of_day,date,week,month]
+    sql: ${TABLE}.starttime ;;
+  }
+  dimension_group: end {
+    type: time
+    convert_tz: no
+    timeframes: [raw,minute,hour,time_of_day,hour_of_day,date,week,month]
+    sql: ${TABLE}.endtime ;;
+  }
+  dimension: elapsed {
+    sql: ${TABLE}.elapsed ;;
+    type: number
+  }
+  dimension: substring {
+    type: string
+    sql: ${TABLE}.substring ;;
+  }
+}
+
+view: recent_queries {
+   #Recent is last "1000" queries (though IDs aren't dense for some reason, so maybe much less)
+  derived_table: {
+    # Insert into PDT because redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
+    persist_for: "2 hours"
+    sql:
+      SELECT query, starttime, endtime, elapsed, substring
+      FROM SVL_QLOG
+      WHERE SVL_QLOG.query>(SELECT max(query)-1000 FROM SVL_QLOG)
+      ;;
+    distribution: "query"
+    sortkeys: ["query"]
+  }
+  dimension: query {
+    sql: ${TABLE}.query ;;
+    type: number
+    value_format_name: id
+  }
+  dimension_group: start {
+    type: time
+    convert_tz: no
+    timeframes: [raw,minute,hour,time_of_day,hour_of_day,date,week,month]
+    sql: ${TABLE}.starttime ;;
+  }
+  dimension_group: end {
+    type: time
+    convert_tz: no
+    timeframes: [raw,minute,hour,time_of_day,hour_of_day,date,week,month]
+    sql: ${TABLE}.endtime ;;
+  }
+  dimension: elapsed {
+    sql: ${TABLE}.elapsed ;;
+    type: number
+  }
+  dimension: substring {
+    type: string
+    sql: ${TABLE}.substring ;;
+  }
+}
+
+view: recent_plan_steps {
+  #Recent is last "1000" queries, based on (persiseted) recent_queries
+  derived_table: {
+    # Insert into PDT because redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
+    persist_for: "2 hours"
+    sql:
+        SELECT
+        query, nodeid,
         substring(regexp_substr(plannode, 'XN ([A-Z][a-z]+ ?)+'),3) as operation,
         substring(regexp_substr(plannode, 'DS_[A-Z_]+'),0) as network_distribution_type,
         substring(info from 1 for 240) as operation_argument,
@@ -391,24 +469,22 @@ view: recent_plan_steps {
         ('0'||COALESCE(substring(regexp_substr(plannode,' rows=[0-9]+'),7),''))::bigint as "rows",
         ('0'||COALESCE(substring(regexp_substr(plannode,' width=[0-9]+'),8),''))::bigint as width,
         substring(regexp_substr(plannode,'\\(cost=[0-9]+'),7) as cost_lo,
-        substring(regexp_substr(plannode,'\\.\\.[0-9]+'),3) as cost_hi,
-        CASE 
-          WHEN COALESCE(parentid,0)=0 THEN 'p' 
-          WHEN nodeid=min(nodeid) OVER (PARTITION BY query,parentid) THEN 'i'
-          ELSE 'o' END
-        as inner_outer
+        substring(regexp_substr(plannode,'\\.\\.[0-9]+'),3) as cost_hi
       FROM stl_explain
-      WHERE stl_explain.query>(SELECT max(query)-1000 FROM stl_explain)
-      ;;
+      WHERE stl_explain.query>=(SELECT min(query) FROM ${recent_queries.SQL_TABLE_NAME})
+        AND stl_explain.query<=(SELECT max(query) FROM ${recent_queries.SQL_TABLE_NAME})
+    ;;
     distribution: "table"
   }
   dimension: query {
     sql: ${TABLE}.query ;;
     type: number
+    value_format_name: id
   }
   dimension: step {
     sql: ${TABLE}.nodeid ;;
     type: number
+    value_format_name: id
   }
   dimension: query_step {
     sql: ${query}||'.'||${step} ;;
@@ -454,6 +530,7 @@ view: recent_plan_steps {
   }
   measure: count {
     type: count
+    drill_fields: [query_drill*]
   }
   measure: total_rows{
     label: "Total rows out"
@@ -465,5 +542,13 @@ view: recent_plan_steps {
     label: "Total bytes out"
     type: "sum"
     sql:  ${bytes} ;;
+  }
+  set: query_drill {
+    fields: [recent_queries.query
+      ,recent_queries.starttime
+      ,recent_queries.elapsed
+      ,recent_queries.substring
+      ,recent_plan_steps.count
+    ]
   }
 }
