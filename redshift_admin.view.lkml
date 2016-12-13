@@ -426,7 +426,7 @@ view: recent_plan_steps {
     type: "string"
   }
   dimension: table {
-    sql: ${TABLE}.tbl ;;
+    sql: ${TABLE}."table" ;;
     type: "string"
   }
   dimension: operation_argument {
