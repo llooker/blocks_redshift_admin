@@ -391,46 +391,6 @@ view: recent_queries {
     sql: ${TABLE}.query ;;
     type: number
     value_format_name: id
-  }
-  dimension_group: start {
-    type: time
-    convert_tz: no
-    timeframes: [raw,minute,hour,time_of_day,hour_of_day,date,week,month]
-    sql: ${TABLE}.starttime ;;
-  }
-  dimension_group: end {
-    type: time
-    convert_tz: no
-    timeframes: [raw,minute,hour,time_of_day,hour_of_day,date,week,month]
-    sql: ${TABLE}.endtime ;;
-  }
-  dimension: elapsed {
-    sql: ${TABLE}.elapsed ;;
-    type: number
-  }
-  dimension: substring {
-    type: string
-    sql: ${TABLE}.substring ;;
-  }
-}
-
-view: recent_queries {
-   #Recent is last "1000" queries (though IDs aren't dense for some reason, so maybe much less)
-  derived_table: {
-    # Insert into PDT because redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
-    persist_for: "2 hours"
-    sql:
-      SELECT query, starttime, endtime, elapsed, substring
-      FROM SVL_QLOG
-      WHERE SVL_QLOG.query>(SELECT max(query)-1000 FROM SVL_QLOG)
-      ;;
-    distribution: "query"
-    sortkeys: ["query"]
-  }
-  dimension: query {
-    sql: ${TABLE}.query ;;
-    type: number
-    value_format_name: id
     drill_fields: [recent_plan_steps.step]
   }
   dimension_group: start {
