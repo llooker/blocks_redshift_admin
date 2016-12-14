@@ -470,6 +470,11 @@ view: recent_plan_steps {
         ('0'||COALESCE(substring(regexp_substr(plannode,' width=[0-9]+'),8),''))::bigint as width,
         substring(regexp_substr(plannode,'\\(cost=[0-9]+'),7) as cost_lo,
         substring(regexp_substr(plannode,'\\.\\.[0-9]+'),3) as cost_hi
+        CASE
+          WHEN COALESCE(parentid,0)=0 THEN 'r'
+          WHEN nodeid = MIN(nodeid) OVER (PARTITION BY query,parentid) THEN 'i'
+          ELSE 'o'
+        END::CHAR(1) as inner_outer
       FROM stl_explain
       WHERE stl_explain.query>=(SELECT min(query) FROM ${recent_queries.SQL_TABLE_NAME})
         AND stl_explain.query<=(SELECT max(query) FROM ${recent_queries.SQL_TABLE_NAME})
