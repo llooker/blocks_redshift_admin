@@ -431,6 +431,7 @@ view: recent_queries {
     sql: ${TABLE}.query ;;
     type: number
     value_format_name: id
+    drill_fields: [recent_plan_steps.step]
   }
   dimension_group: start {
     type: time
@@ -461,30 +462,32 @@ view: recent_plan_steps {
     persist_for: "2 hours"
     sql:
         SELECT
-        query, nodeid,
-        substring(regexp_substr(plannode, 'XN ([A-Z][a-z]+ ?)+'),3) as operation,
+        query, nodeid, parentid,
+        substring(regexp_substr(plannode, 'XN( [A-Z][a-z]+)+'),4) as operation,
         substring(regexp_substr(plannode, 'DS_[A-Z_]+'),0) as network_distribution_type,
         substring(info from 1 for 240) as operation_argument,
         substring(regexp_substr(plannode,' on [\._a-zA-Z0-9]+'),5) as "table",
-        ('0'||COALESCE(substring(regexp_substr(plannode,' rows=[0-9]+'),7),''))::bigint as "rows",
-        ('0'||COALESCE(substring(regexp_substr(plannode,' width=[0-9]+'),8),''))::bigint as width,
+        ('0'||COALESCE(substring(regexp_substr(plannode,' rows=[0-9]+'),7),''))::decimal(38,0) as "rows",
+        ('0'||COALESCE(substring(regexp_substr(plannode,' width=[0-9]+'),8),''))::decimal(38,0) as width,
         substring(regexp_substr(plannode,'\\(cost=[0-9]+'),7) as cost_lo,
-        substring(regexp_substr(plannode,'\\.\\.[0-9]+'),3) as cost_hi
+        substring(regexp_substr(plannode,'\\.\\.[0-9]+'),3) as cost_hi,
         CASE
-          WHEN COALESCE(parentid,0)=0 THEN 'r'
-          WHEN nodeid = MIN(nodeid) OVER (PARTITION BY query,parentid) THEN 'i'
-          ELSE 'o'
-        END::CHAR(1) as inner_outer
+          WHEN COALESCE(parentid,0)=0 THEN 'root'
+          WHEN nodeid = MIN(nodeid) OVER (PARTITION BY query,parentid) THEN 'inner'
+          ELSE 'outer'
+        END::CHAR(5) as inner_outer
       FROM stl_explain
       WHERE stl_explain.query>=(SELECT min(query) FROM ${recent_queries.SQL_TABLE_NAME})
         AND stl_explain.query<=(SELECT max(query) FROM ${recent_queries.SQL_TABLE_NAME})
     ;;
+    #TODO: Triple check inner/outer vs min/max nodeid pairing
     distribution: "table"
   }
   dimension: query {
     sql: ${TABLE}.query ;;
     type: number
     value_format_name: id
+    drill_fields: [recent_plan_steps.step]
   }
   dimension: step {
     sql: ${TABLE}.nodeid ;;
@@ -496,15 +499,54 @@ view: recent_plan_steps {
     primary_key: yes
     hidden: yes
   }
+  dimension: parent_step {
+    type: number
+    sql: ${TABLE}.parentid;;
+    hidden: yes
+  }
   dimension: operation {
     label: "Operation"
     sql: ${TABLE}.operation ;;
     type: "string"
+    html:
+      {% if value contains 'Nested' %}
+        <span style="color: darkred">{{ rendered_value }}</span>
+      {% else %}
+        {{ rendered_value }}
+      {% endif %}
+    ;;
+  }
+  dimension: operation_join_algorithm {
+    type: "string"
+    sql: CASE WHEN ${operation} ILIKE '%Join%'
+      THEN regexp_substr(${operation},'^[A-Za-z]+')
+      ELSE 'Not a Join' END
+    ;;
+    html:
+      {% if value == 'Nested' %}
+      <span style="color: darkred">{{ rendered_value }}</span>
+      {% else %}
+      {{ rendered_value }}
+      {% endif %}
+    ;;
   }
   dimension: network_distribution_type {
-    label: "Distribution style"
+    label: "Network Redistribution"
+    description: "AWS Docs http://docs.aws.amazon.com/redshift/latest/dg/c_data_redistribution.html"
     sql: ${TABLE}.network_distribution_type ;;
     type: "string"
+    html:
+    {% if value == 'DS_DIST_ALL_INNER' or value == 'DS_BCAST_INNER' %}
+      <span style="color: darkred">{{ rendered_value }}</span>
+    {% elsif value == 'DS_DIST_BOTH' %}
+      <span style="color: darkorange">{{ rendered_value }}</span>
+    {% elsif value == 'DS_DIST_ALL_NONE' or value == 'DS_DIST_NONE'%}
+      <span style="color: green">{{ rendered_value }}</span>
+    {% else %}
+      {{ rendered_value }}
+    {% endif %}
+    ;;
+    #DS_DIST_OUTER is not even in the AWS Docs...?
   }
   dimension: table {
     sql: ${TABLE}."table" ;;
@@ -533,6 +575,12 @@ view: recent_plan_steps {
     sql: ${rows} * ${width} ;;
     type: "number"
   }
+  dimension: inner_outer {
+    label: "Child Inner/Outer"
+    description: "If the step is a child of another step, whether it is the inner or outer child of the parent, e.g. for network redistribution in joins"
+    type: "string"
+    sql: ${TABLE}.inner_outer ;;
+  }
   measure: count {
     type: count
     drill_fields: [query_drill*]
@@ -554,6 +602,22 @@ view: recent_plan_steps {
       ,recent_queries.elapsed
       ,recent_queries.substring
       ,recent_plan_steps.count
+      ,recent_plan_steps.total_rows
+      ,inner_child.total_rows
+    ]
+  }
+  
+  set: steps_drill {
+    fields: [
+      recent_plan_steps.query,
+      recent_plan_steps.parent_step,
+      recent_plan_steps.step,
+      recent_plan_steps.operation,
+      recent_plan_steps.operation_argument,
+      recent_plan_steps.network_distribution_type,
+      recent_plan_steps.rows,
+      recent_plan_steps.width,
+      recent_plan_steps.bytes
     ]
   }
 }

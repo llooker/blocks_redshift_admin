@@ -36,6 +36,21 @@ explore: recent_plan_steps {
     type: left_outer
     relationship: many_to_one
   }
+  join: recent_queries {
+    sql_on: ${recent_queries.query} = ${recent_plan_steps.query} ;;
+    relationship: many_to_one
+    type: left_outer
+  }
+  join: inner_child {
+    from: recent_plan_steps
+    view_label: "Recent Plan Steps > Inner Child"
+    sql_on: ${inner_child.query}=${recent_plan_steps.query}
+      AND   ${inner_child.parent_step} = ${recent_plan_steps.step}
+      AND   ${inner_child.inner_outer} = 'inner';;
+    type: left_outer
+    relationship: one_to_one
+    fields: [table,rows,bytes,total_rows,total_bytes]                                               
+  }
 }
 
 explore: view_definitions {
