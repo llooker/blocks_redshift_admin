@@ -11,48 +11,64 @@ include: "redshift_*view"
 
 # views to explore—i.e., "base views" #
 
-explore: data_loads {}
+explore: redshift_data_loads {}
 
-explore: db_space {
+explore: redshift_db_space {
   label: "DB Space"
 }
 
-explore: etl_errors {
+explore: redshift_etl_errors {
   label: "ETL Errors"
 }
 
-explore: tables {
-
-  join: recent_plan_steps {
-    sql_on: ${recent_plan_steps.table}=${tables.table} ;;
+explore: redshift_tables {
+  view_label: "[Redshift Tables]"
+  join: redshift_plan_steps {
+    sql_on: ${redshift_plan_steps.table}=${redshift_tables.table} ;;
     type: left_outer
     relationship: one_to_many
+    fields:[count, total_rows, total_bytes]
   }
+  join: redshift_queries {
+    sql_on: ${redshift_queries.query} = ${redshift_plan_steps.query} ;;
+    relationship: many_to_one
+    type: left_outer
+    fields: [count,total_time_executing,time_executing_per_query]
+  }
+  fields: [ALL_FIELDS*,-redshift_plan_steps.network_distribution_bytes]
 }
 
-explore: recent_plan_steps {
-  join: tables {
-    sql_on: ${tables.table}=${recent_plan_steps.table} ;;
+explore: redshift_plan_steps {
+  join: redshift_tables {
+    sql_on: ${redshift_tables.table}=${redshift_plan_steps.table} ;;
     type: left_outer
     relationship: many_to_one
   }
-  join: recent_queries {
-    sql_on: ${recent_queries.query} = ${recent_plan_steps.query} ;;
+  join: redshift_queries {
+    sql_on: ${redshift_queries.query} = ${redshift_plan_steps.query} ;;
     relationship: many_to_one
     type: left_outer
   }
   join: inner_child {
-    from: recent_plan_steps
-    view_label: "Recent Plan Steps > Inner Child"
-    sql_on: ${inner_child.query}=${recent_plan_steps.query}
-      AND   ${inner_child.parent_step} = ${recent_plan_steps.step}
+    from: redshift_plan_steps
+    view_label: "Redshift Plan Steps > Inner Child"
+    sql_on: ${inner_child.query}=${redshift_plan_steps.query}
+      AND   ${inner_child.parent_step} = ${redshift_plan_steps.step}
       AND   ${inner_child.inner_outer} = 'inner';;
     type: left_outer
     relationship: one_to_one
-    fields: [table,rows,bytes,total_rows,total_bytes]                                               
+    fields: [table,rows,bytes,total_rows,total_bytes]
+  }
+  join: outer_child {
+    from: redshift_plan_steps
+    view_label: "Redshift Plan Steps > Outer Child"
+    sql_on: ${outer_child.query}=${redshift_plan_steps.query}
+      AND   ${outer_child.parent_step} = ${redshift_plan_steps.step}
+      AND   ${outer_child.inner_outer} = 'outer';;
+    type: left_outer
+    relationship: one_to_one
+    fields: [table,rows,bytes,total_rows,total_bytes]
   }
 }
 
-explore: view_definitions {
-  from: pg_views
-}
+explore: redshift_queries {}

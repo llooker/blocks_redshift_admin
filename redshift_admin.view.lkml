@@ -1,26 +1,7 @@
 # view definitions #
 
-view: pg_views {
-  sql_table_name: pg_views ;;
-  # dimensions #
 
-  dimension: definition {
-    type: string
-    sql: ${TABLE}.definition ;;
-  }
-
-  dimension: schema {
-    type: string
-    sql: ${TABLE}.schemaname ;;
-  }
-
-  dimension: view {
-    type: string
-    sql: ${TABLE}.viewname ;;
-  }
-}
-
-view: tables {
+view: redshift_tables {
   derived_table: {
     # Insert into PDT because redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
     persist_for: "8 hours"
@@ -37,7 +18,6 @@ view: tables {
         "sortkey_num"::int,
         "size"::bigint,
         "pct_used"::numeric,
-        "empty"::numeric,
         "unsorted"::numeric,
         "stats_off"::numeric,
         "tbl_rows"::bigint,
@@ -45,6 +25,7 @@ view: tables {
         "skew_rows"::numeric
       from svv_table_info
     ;;
+    # http://docs.aws.amazon.com/redshift/latest/dg/r_SVV_TABLE_INFO.html
     distribution: "table"
   }
 
@@ -59,24 +40,21 @@ view: tables {
     type: string
     sql: ${TABLE}.schema ;;
   }
-
   dimension: table_id {
     type: number
     sql: ${TABLE}.table_id ;;
   }
-
   dimension: table {
     type: string
     sql: ${TABLE}."table" ;;
   }
-
-  dimension: schema_table {
-    sql: ${schema}||'.'||${table} ;;
+  dimension: id {
+    sql: ${database}||'.'${schema}||'.'||${table} ;;
     primary_key: yes
     hidden: yes
   }
-
   dimension: encoded {
+    description: "Whether any column has compression encoding defined"
     type: yesno
     sql: case ${TABLE}.encoded
         when 'Y'
@@ -87,10 +65,18 @@ view: tables {
       end
        ;;
   }
-
   dimension: distribution_style {
     type: string
     sql: ${TABLE}.diststyle ;;
+    html: 
+    {% if value == 'EVEN' %}
+      <span style="color: darkorange">{{ rendered_value }}</span>
+    {% elsif value == 'ALL' or value == 'DS_DIST_NONE'%}
+      <span style="color: dimgray">{{ rendered_value }}</span>
+    {% else %}
+      {{ rendered_value }}
+    {% endif %}
+    ;;
   }
 
   dimension: sortkey {
@@ -100,11 +86,13 @@ view: tables {
   }
 
   dimension: max_varchar {
+    description: "Size of the largest column that uses a VARCHAR data type"
     type: number
     sql: ${TABLE}.max_varchar ;;
   }
 
   dimension: sortkey_encoding {
+    description: "Compression encoding of the first column in the sort key, if a sort key is defined"
     type: string
     sql: ${TABLE}.sortkey1_enc ;;
   }
@@ -113,44 +101,60 @@ view: tables {
     type: number
     sql: ${TABLE}.sortkey_num ;;
   }
-
   dimension: size {
-    label: "Rows"
+    label: "Size"
+    description: "Size of the table, in 1 MB data blocks"
     type: number
     sql: ${TABLE}.size ;;
   }
-
   dimension: pct_used {
     type: number
+    description: "Percent of available space that is used by the table"
     sql: ${TABLE}.pct_used ;;
   }
-
-  dimension: empty {
-    type: number
-    sql: ${TABLE}.empty ;;
-  }
-
   dimension: unsorted {
+    description: "Percent of unsorted rows in the table"
     type: number
     sql: ${TABLE}.unsorted ;;
+    html: 
+      {% if value >= 50 %}
+        <span style="color: darkred">{{ rendered_value }}</span>
+      {% elsif value >= 10 %}
+        <span style="color: darkorange">{{ rendered_value }}</span>
+      {% elsif value < 10 %}
+        <span style="color: green">{{ rendered_value }}</span>
+      {% else %}
+        {{ rendered_value }}
+      {% endif %}
+    ;;
   }
-
   dimension: stats_off {
+    description: "Number that indicates how stale the table's statistics are; 0 is current, 100 is out of date"
     type: number
     sql: ${TABLE}.stats_off ;;
+    html: 
+      {% if value >= 50 %}
+        <span style="color: darkred">{{ rendered_value }}</span>
+      {% elsif value >= 10 %}
+        <span style="color: darkorange">{{ rendered_value }}</span>
+      {% elsif value < 10 %}
+        <span style="color: green">{{ rendered_value }}</span>
+      {% else %}
+        {{ rendered_value }}
+      {% endif %}
+    ;;
   }
-
   dimension: rows_in_table {
     type: number
     sql: ${TABLE}.tbl_rows ;;
   }
-
   dimension: skew_sortkey {
+    description: "Ratio of the size of the largest non-sort key column to the size of the first column of the sort key, if a sort key is defined. Use this value to evaluate the effectiveness of the sort key"
     type: number
     sql: ${TABLE}.skew_sortkey1 ;;
   }
-
   dimension: skew_rows {
+    description: "Ratio of the number of rows in the slice with the most rows to the number of rows in the slice with the fewest rows"
     type: number
     sql: ${TABLE}.skew_rows ;;
     html: {% if value < 25 %}
@@ -162,7 +166,6 @@ view: tables {
       {% endif %}
       ;;
   }
-
   measure: count {
     type: count
   }
@@ -173,7 +176,7 @@ view: tables {
 
 }
 
-view: db_space {
+view: redshift_db_space {
   derived_table: {
     sql: select name as table
         , trim(pgn.nspname) as schema
@@ -249,7 +252,7 @@ view: db_space {
   }
 }
 
-view: etl_errors {
+view: redshift_etl_errors {
   derived_table: {
     sql: select starttime as error_time
         , filename as file_name
@@ -307,7 +310,7 @@ view: etl_errors {
   }
 }
 
-view: data_loads {
+view: redshift_data_loads {
   derived_table: {
     sql: select replace(regexp_substr(filename, '//[a-zA-Z0-9\-]+/'), '/', '') as root_bucket
         , replace(filename, split_part(filename, '/', regexp_count(filename, '/') + 1), '') as s3_path
@@ -374,52 +377,119 @@ view: data_loads {
   }
 }
 
-view: recent_queries {
-   #Recent is last "1000" queries (though IDs aren't dense for some reason, so maybe much less)
+view: redshift_queries {
+  #Recent is last "5000" queries (we only see queries related to our rs user_id, so actual number is smaller)
+  #description: "Recent queries to Redshift"
   derived_table: {
-    # Insert into PDT because redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
-    persist_for: "2 hours"
-    sql:
-      SELECT query, starttime, endtime, elapsed, substring
-      FROM SVL_QLOG
-      WHERE SVL_QLOG.query>(SELECT max(query)-1000 FROM SVL_QLOG)
-      ;;
+    sql_trigger_value: SELECT FLOOR((EXTRACT(epoch from GETDATE()) - 60*60*22)/(60*60*24)) ;; #22h
+    sql: SELECT
+        wlm.query,
+        q.substring,
+        --wlm.service_class,
+        sc.name as service_class,
+        wlm.service_class_start_time as start_time,
+        wlm.total_queue_time,
+        wlm.total_exec_time,
+        q.elapsed --Hmm.. this measure seems to be greater than queue_time+exec_time
+      FROM STL_WLM_QUERY wlm
+      LEFT JOIN STV_WLM_SERVICE_CLASS_CONFIG sc ON sc.service_class=wlm.service_class
+      LEFT JOIN SVL_QLOG q on q.query=wlm.query
+      WHERE wlm.query>=(SELECT MAX(query)-5000 FROM STL_WLM_QUERY)
+    ;;
+    #STL_QUERY could also be used instead of SVL_QLOG. It has more characters of query text (4000), but is only retained for "2 to 5 days"
     distribution: "query"
-    sortkeys: ["query"]
+    sortkeys: ["start_time"]
   }
   dimension: query {
-    sql: ${TABLE}.query ;;
     type: number
-    value_format_name: id
-    drill_fields: [recent_plan_steps.step]
+    hidden: yes
+    sql: ${TABLE}.query ;;
+    primary_key: yes
   }
   dimension_group: start {
     type: time
-    convert_tz: no
-    timeframes: [raw,minute,hour,time_of_day,hour_of_day,date,week,month]
-    sql: ${TABLE}.starttime ;;
+    timeframes: [raw, minute15, hour, day_of_week, date]
+    sql: ${TABLE}.start_time ;;
   }
-  dimension_group: end {
-    type: time
-    convert_tz: no
-    timeframes: [raw,minute,hour,time_of_day,hour_of_day,date,week,month]
-    sql: ${TABLE}.endtime ;;
+  dimension: service_class {
+    type: string
+    sql: ${TABLE}.service_class ;;
   }
-  dimension: elapsed {
-    sql: ${TABLE}.elapsed ;;
+  dimension: time_in_queue {
     type: number
+    description: "Amount of time that a query was queued before running, in seconds"
+    sql: ${TABLE}.total_queue_time /1000000;;
+  }
+  dimension: time_executing {
+    type: number
+    description: "Amount of time that a query was executing, in seconds"
+    sql: ${TABLE}.total_exec_time /1000000;;
+  }
+  dimension: time_overall {
+    type: number
+    description: "Amount of time that a query took (both queued and executing), in seconds"
+    sql: ${time_in_queue} + ${time_executing}  ;;
+  }
+  dimension: time_elapsed {
+    type: number
+    description: "Amount of time (from another table, for comparison...)"
+    sql: ${TABLE}.elapsed / 1000000 ;;
   }
   dimension: substring {
     type: string
     sql: ${TABLE}.substring ;;
   }
+  dimension:  was_queued {
+    type: yesno
+    sql: ${TABLE}.total_queue_time > 0;;
+  }
+  measure: count {
+    type: count
+    sql: ${TABLE}.query ;;
+    drill_fields: [query, start_date, time_executing, substring]
+  }
+  measure: count_of_queued {
+    type: sum
+    sql: ${was_queued}::int ;;
+  }
+  measure: percent_queued {
+    type: number
+    value_format: "0.## \%"
+    sql: ${count_of_queued} / ${count} * 100 ;;
+  }
+  measure: total_time_in_queue {
+    type: sum
+    description: "Sum of time that queries were queued before running, in seconds"
+    sql: ${time_in_queue};;
+  }
+  measure: total_time_executing {
+    type: sum
+    description: "Sum of time that queries were executing, in seconds"
+    sql: ${time_executing};;
+  }
+  measure: total_time_overall {
+    type: sum
+    description: "Sum of time that queries took (both queued and executing), in seconds"
+    sql: ${time_in_queue} + ${time_executing}  ;;
+  }
+  measure: total_time_elapsed {
+    type: sum
+    description: "Sum of time from another table, for comparison"
+    sql: ${time_elapsed}  ;;
+  }
+  measure: time_executing_per_query {
+    type: number
+    sql: CASE WHEN ${count}<>0 THEN ${total_time_executing} / ${count} ELSE NULL END ;;
+    value_format_name: decimal_1
+  }
 }
 
-view: recent_plan_steps {
+view: redshift_plan_steps {
   #Recent is last "1000" queries, based on (persiseted) recent_queries
+  #description: "Steps from the query planner for recent queries to Redshift"
   derived_table: {
     # Insert into PDT because redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
-    persist_for: "2 hours"
+    sql_trigger_value: SELECT FLOOR((EXTRACT(epoch from GETDATE()) - 60*60*23)/(60*60*24)) ;; #23h
     sql:
         SELECT
         query, nodeid, parentid,
@@ -437,8 +507,8 @@ view: recent_plan_steps {
           ELSE 'outer'
         END::CHAR(5) as inner_outer
       FROM stl_explain
-      WHERE stl_explain.query>=(SELECT min(query) FROM ${recent_queries.SQL_TABLE_NAME})
-        AND stl_explain.query<=(SELECT max(query) FROM ${recent_queries.SQL_TABLE_NAME})
+      WHERE query>=(SELECT min(query) FROM ${redshift_queries.SQL_TABLE_NAME})
+        AND query<=(SELECT max(query) FROM ${redshift_queries.SQL_TABLE_NAME})
     ;;
     #TODO: Triple check inner/outer vs min/max nodeid pairing
     distribution: "table"
@@ -447,7 +517,7 @@ view: recent_plan_steps {
     sql: ${TABLE}.query ;;
     type: number
     value_format_name: id
-    drill_fields: [recent_plan_steps.step]
+    drill_fields: [redshift_plan_steps.step]
   }
   dimension: step {
     sql: ${TABLE}.nodeid ;;
@@ -508,6 +578,16 @@ view: recent_plan_steps {
     ;;
     #DS_DIST_OUTER is not even in the AWS Docs...?
   }
+  dimension: network_distribution_bytes {
+    #TODO: Multiply by number of nodes if BCAST?
+    description: "Bytes from inner and outer children needing to be distributed or broadcast. (For broadcast, this value does not multiply by the number of nodes broadcast to.)"
+    sql: CASE 
+      WHEN ${network_distribution_type} ILIKE '%INNER%' THEN ${inner_child.bytes}
+      WHEN ${network_distribution_type} ILIKE '%OUTER%' THEN ${outer_child.bytes}
+      WHEN ${network_distribution_type} ILIKE '%BOTH%' THEN ${inner_child.bytes} + ${outer_child.bytes}
+      ELSE 0
+    END ;;
+  }
   dimension: table {
     sql: ${TABLE}."table" ;;
     type: "string"
@@ -543,7 +623,7 @@ view: recent_plan_steps {
   }
   measure: count {
     type: count
-    drill_fields: [query_drill*]
+    drill_fields: [query, parent_step, step, operation, operation_argument, network_distribution_type]
   }
   measure: total_rows{
     label: "Total rows out"
@@ -556,28 +636,23 @@ view: recent_plan_steps {
     type: "sum"
     sql:  ${bytes} ;;
   }
-  set: query_drill {
-    fields: [recent_queries.query
-      ,recent_queries.starttime
-      ,recent_queries.elapsed
-      ,recent_queries.substring
-      ,recent_plan_steps.count
-      ,recent_plan_steps.total_rows
-      ,inner_child.total_rows
-    ]
-  }
   
+  measure: total_network_distribution_bytes {
+    type: sum
+    sql: ${network_distribution_bytes} ;;
+  }
+
   set: steps_drill {
     fields: [
-      recent_plan_steps.query,
-      recent_plan_steps.parent_step,
-      recent_plan_steps.step,
-      recent_plan_steps.operation,
-      recent_plan_steps.operation_argument,
-      recent_plan_steps.network_distribution_type,
-      recent_plan_steps.rows,
-      recent_plan_steps.width,
-      recent_plan_steps.bytes
+      redshift_plan_steps.query,
+      redshift_plan_steps.parent_step,
+      redshift_plan_steps.step,
+      redshift_plan_steps.operation,
+      redshift_plan_steps.operation_argument,
+      redshift_plan_steps.network_distribution_type,
+      redshift_plan_steps.rows,
+      redshift_plan_steps.width,
+      redshift_plan_steps.bytes
     ]
   }
 }
