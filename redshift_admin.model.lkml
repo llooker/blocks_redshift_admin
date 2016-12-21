@@ -11,16 +11,6 @@ include: "redshift_*view"
 
 # views to explore—i.e., "base views" #
 
-explore: redshift_data_loads {}
-
-explore: redshift_db_space {
-  label: "DB Space"
-}
-
-explore: redshift_etl_errors {
-  label: "ETL Errors"
-}
-
 explore: redshift_tables {
   view_label: "[Redshift Tables]"
   join: redshift_plan_steps {
@@ -72,3 +62,14 @@ explore: redshift_plan_steps {
 }
 
 explore: redshift_queries {}
+
+explore: redshift_slices {hidden:yes}
+
+explore: redshift_query_execution {
+  hidden:  yes
+  always_filter: {
+    filters: {
+      field: query
+    }
+  }
+}
