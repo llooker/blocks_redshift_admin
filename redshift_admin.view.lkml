@@ -423,9 +423,12 @@ view: redshift_queries {
   }
   dimension: query {
     type: number
-    hidden: yes
     sql: ${TABLE}.query ;;
     primary_key: yes
+    link: {
+      label: "Inspect"
+      url: "https://metanew.looker.com/dashboards/1230?Query%20ID={{value}}"
+    }
   }
   dimension_group: start {
     type: time
