@@ -1,6 +1,3 @@
-# view definitions #
-
-
 view: redshift_pg_views {
   sql_table_name: pg_views ;;
   # dimensions #
@@ -110,45 +107,35 @@ view: redshift_etl_errors {
       from stl_load_errors
        ;;
   }
-
-  # dimensions #
-
   dimension_group: error {
     type: time
     timeframes: [time, date]
     sql: ${TABLE}.error_time ;;
   }
-
   dimension: file_name {
     type: string
     sql: ${TABLE}.file_name ;;
   }
-
   dimension: column_name {
     type: string
     sql: ${TABLE}.column_name ;;
   }
-
   dimension: column_data_type {
     type: string
     sql: ${TABLE}.column_data_type ;;
   }
-
   dimension: error_position {
     type: string
     sql: ${TABLE}.error_position ;;
   }
-
   dimension: error_field_value {
     type: string
     sql: ${TABLE}.error_field_value ;;
   }
-
   dimension: error_reason {
     type: string
     sql: ${TABLE}.error_reason ;;
   }
-
   dimension: raw_line {
     type: string
     sql: ${TABLE}.raw_line ;;
@@ -166,47 +153,36 @@ view: redshift_data_loads {
       from stl_load_commits
        ;;
   }
-
-  # dimensions #
-
+  
   dimension: root_bucket {
     type: string
     sql: ${TABLE}.root_bucket ;;
   }
-
   dimension: s3_path {
     type: string
     sql: ${TABLE}.s3_path ;;
   }
-
   dimension: s3_path_clean {
     type: string
     sql: ${TABLE}.s3_path_clean ;;
   }
-
   dimension: file_name {
     type: string
     sql: ${TABLE}.file_name ;;
   }
-
   dimension: file_stem {
     type: string
     sql: ${TABLE}.file_stem ;;
   }
-
   dimension_group: load {
     type: time
     timeframes: [raw, time, date]
     sql: ${TABLE}.load_time ;;
   }
-
-  # measures #
-
   measure: most_recent_load {
     type: string
     sql: max(${load_raw}) ;;
   }
-
   measure: hours_since_last_load {
     type: number
     value_format_name: id
@@ -231,10 +207,15 @@ view: redshift_plan_steps {
     sql:
         SELECT
         query, nodeid, parentid,
-        substring(regexp_substr(plannode, 'XN( [A-Z][a-z]+)+'),4) as operation,
+        CASE WHEN plannode='SubPlan' THEN 'SubPlan'
+        ELSE substring(regexp_substr(plannode, 'XN( [A-Z][a-z]+)+'),4) END as operation,
         substring(regexp_substr(plannode, 'DS_[A-Z_]+'),0) as network_distribution_type,
         substring(info from 1 for 240) as operation_argument,
-        substring(regexp_substr(plannode,' on [\._a-zA-Z0-9]+'),5) as "table",
+        CASE
+          WHEN plannode NOT LIKE '% on %' THEN NULL
+          WHEN plannode LIKE '% on "%' THEN substring(regexp_substr(plannode,' on "[^"]+'),6)
+          ELSE substring(regexp_substr(plannode,' on [\._a-zA-Z0-9]+'),5)
+        END as "table",
         RIGHT('0'||COALESCE(substring(regexp_substr(plannode,' rows=[0-9]+'),7),''),32)::decimal(38,0) as "rows",
         RIGHT('0'||COALESCE(substring(regexp_substr(plannode,' width=[0-9]+'),8),''),32)::decimal(38,0) as width,
         substring(regexp_substr(plannode,'\\(cost=[0-9]+'),7) as cost_lo,
@@ -249,10 +230,12 @@ view: redshift_plan_steps {
         AND query<=(SELECT max(query) FROM ${redshift_queries.SQL_TABLE_NAME})
     ;;
     #TODO: Triple check inner/outer vs min/max nodeid pairing
-    distribution: "table"
+    #TODO?: Currently not extracting the sequential scan column, but I'm not sure if this is useful to extract. What's more useful as far as I can tell are the fields in the filter (operation argument)
+    distribution: "query"
+    sortkeys: ["query"]
   }
   dimension: query {
-    sql: ${TABLE}.query ;;
+    sql: ${TABLE}.query;;
     type: number
     value_format_name: id
     drill_fields: [redshift_plan_steps.step]
@@ -264,7 +247,7 @@ view: redshift_plan_steps {
   }
   dimension: query_step {
     sql: ${query}||'.'||${step} ;;
-    primary_key: yes
+    #primary_key: yes #Unfortunately not, because all CTE plans are labeled as step 0
     hidden: yes
   }
   dimension: parent_step {
@@ -396,7 +379,7 @@ view: redshift_plan_steps {
 }
 
 view: redshift_queries {
-  # Recent is last 24 hours of queries 
+  # Recent is last 24 hours of queries
   # (we only see queries related to our rs user_id)
   derived_table: {
     sql_trigger_value: SELECT FLOOR((EXTRACT(epoch from GETDATE()) - 60*60*22)/(60*60*24)) ;; #22h
@@ -408,18 +391,20 @@ view: redshift_queries {
         wlm.service_class_start_time as start_time,
         wlm.total_queue_time,
         wlm.total_exec_time,
-        q.elapsed --Hmm.. this measure seems to be greater than queue_time+exec_time
+        q.elapsed, --Hmm.. this measure seems to be greater than queue_time+exec_time
+        COALESCE(qlong.querytxt,q.substring) as querytxt
       FROM STL_WLM_QUERY wlm
       LEFT JOIN STV_WLM_SERVICE_CLASS_CONFIG sc ON sc.service_class=wlm.service_class
       LEFT JOIN SVL_QLOG q on q.query=wlm.query
+      LEFT JOIN STL_QUERY qlong on qlong.query=q.query
       WHERE wlm.service_class_start_time >= dateadd(day,-1,GETDATE())
       AND wlm.service_class_start_time <= GETDATE()
       --WHERE wlm.query>=(SELECT MAX(query)-5000 FROM STL_WLM_QUERY)
     ;;
-    #STL_QUERY could also be used instead of SVL_QLOG. It has more characters of query text (4000), but is only retained for "2 to 5 days"
+    #STL_QUERY vs SVL_QLOG. STL_QUERY has more characters of query text (4000), but is only retained for "2 to 5 days"
     # STL_WLM_QUERY or SVL_QUERY_QUEUE_INFO? http://docs.aws.amazon.com/redshift/latest/dg/r_SVL_QUERY_QUEUE_INFO.html
     distribution: "query"
-    sortkeys: ["start_time"]
+    sortkeys: ["query"]
   }
   dimension: query {
     type: number
@@ -427,7 +412,7 @@ view: redshift_queries {
     primary_key: yes
     link: {
       label: "Inspect"
-      url: "https://metanew.looker.com/dashboards/1230?Query%20ID={{value}}"
+      url: "/dashboards/meta::redshift_query_inspection?query={{value}}"
     }
   }
   dimension_group: start {
@@ -447,7 +432,39 @@ view: redshift_queries {
   dimension: time_executing {
     type: number
     description: "Amount of time that a query was executing, in seconds"
-    sql: ${TABLE}.total_exec_time /1000000;;
+    sql: ${TABLE}.total_exec_time::float /1000000;;
+  }
+  dimension: time_executing_roundup1 {
+    description: "Time executing, rounded up to the nearest 1 second"
+    group_label: "Time Executing Buckets"
+    label: "01 second"
+    type: number
+    sql: CEILING(${TABLE}.total_exec_time::float/1000000) ;;
+    value_format_name: decimal_0
+  }
+  dimension: time_executing_roundup5 {
+    description: "Time executing, rounded up to the nearest 5 seconds"
+    group_label: "Time Executing Buckets"
+    label: "05 seconds"
+    type: number
+    sql: CEILING(${TABLE}.total_exec_time::float/1000000 / 5)*5 ;;
+    value_format_name: decimal_0
+  }
+  dimension: time_executing_roundup10 {
+    description: "Time executing, rounded up to the nearest 10 seconds"
+    group_label: "Time Executing Buckets"
+    label: "10 seconds"
+    type: number
+    sql: CEILING(${TABLE}.total_exec_time::float/1000000 / 10)*10 ;;
+    value_format_name: decimal_0
+  }
+  dimension: time_executing_roundup15 {
+    description: "Time executing, rounded up to the nearest 15 seconds"
+    group_label: "Time Executing Buckets"
+    label: "15 seconds"
+    type: number
+    sql: ${TABLE}.total_exec_time::float/1000000 / 15)*15 ;;
+    value_format_name: decimal_0
   }
   dimension: time_overall {
     type: number
@@ -463,13 +480,16 @@ view: redshift_queries {
     type: string
     sql: ${TABLE}.substring ;;
   }
+  dimension: text {
+    type: string
+    sql: ${TABLE}.querytxt ;;
+  }
   dimension:  was_queued {
     type: yesno
     sql: ${TABLE}.total_queue_time > 0;;
   }
   measure: count {
     type: count
-    sql: ${TABLE}.query ;;
     drill_fields: [query, start_date, time_executing, substring]
   }
   measure: count_of_queued {
@@ -496,11 +516,11 @@ view: redshift_queries {
     description: "Sum of time that queries took (both queued and executing), in seconds"
     sql: ${time_in_queue} + ${time_executing}  ;;
   }
-  measure: total_time_elapsed {
-    type: sum
-    description: "Sum of time from another table, for comparison"
-    sql: ${time_elapsed}  ;;
-  }
+#   measure: total_time_elapsed {
+#     type: sum
+#     description: "Sum of time from another table, for comparison"
+#     sql: ${time_elapsed}  ;;
+#   }
   measure: time_executing_per_query {
     type: number
     sql: CASE WHEN ${count}<>0 THEN ${total_time_executing} / ${count} ELSE NULL END ;;
@@ -511,7 +531,7 @@ view: redshift_queries {
 view: redshift_slices {
   # http://docs.aws.amazon.com/redshift/latest/dg/r_STV_SLICES.html
   # Use the STV_SLICES table to view the current mapping of a slice to a node.
-  # This table is visible to all users. Superusers can see all rows; regular users can see only their own data. 
+  # This table is visible to all users. Superusers can see all rows; regular users can see only their own data.
   derived_table: {
     #sql_trigger_value: SELECT FLOOR((EXTRACT(epoch from GETDATE()) - 60*60*22)/(60*60*24)) ;; #22h
     persist_for: "12 hours"
@@ -564,16 +584,16 @@ view: redshift_tables {
       from svv_table_info
     ;;
     # http://docs.aws.amazon.com/redshift/latest/dg/r_SVV_TABLE_INFO.html
-      distribution: "table"
+      distribution_style: all
+      indexes: ["table_id","table"] # "indexes" translates to an interleaved sort key for Redshift
     }
-    
+
     # dimensions #
-    
+
     dimension: database {
       type: string
       sql: ${TABLE}.database ;;
     }
-    
     dimension: schema {
       type: string
       sql: ${TABLE}.schema ;;
@@ -616,25 +636,25 @@ view: redshift_tables {
           {% endif %}
           ;;
     }
-    
+
     dimension: sortkey {
       description: "First sort key"
       type: string
       sql: ${TABLE}.sortkey1 ;;
     }
-    
+
     dimension: max_varchar {
       description: "Size of the largest column that uses a VARCHAR data type"
       type: number
       sql: ${TABLE}.max_varchar ;;
     }
-    
+
     dimension: sortkey_encoding {
       description: "Compression encoding of the first column in the sort key, if a sort key is defined"
       type: string
       sql: ${TABLE}.sortkey1_enc ;;
     }
-    
+
     dimension: number_of_sortkeys {
       type: number
       sql: ${TABLE}.sortkey_num ;;
@@ -695,48 +715,275 @@ view: redshift_tables {
       description: "Ratio of the number of rows in the slice with the most rows to the number of rows in the slice with the fewest rows"
       type: number
       sql: ${TABLE}.skew_rows ;;
-      html: {% if value < 25 %}
-              <div style="color:#B40404; background-color:#22CE7E; font-size:100%; text-align:center">{{ rendered_value }}</div>
-              {% elsif value >= 25 and value < 50 %}
-              <div style="color:#868A08; background-color:#95F047; font-size:100%; text-align:center">{{ rendered_value }}</div>
-              {% elsif value >= 50 %}
-              <div style="color:#868A08; background-color:#C64646; font-size:100%; text-align:center">{{ rendered_value }}</div>
-              {% endif %}
-              ;;
+      html:
+            {% if value >= 75 %}
+              <span style="color:darkred">{{ rendered_value }}</span>
+            {% elsif value >= 25 %}
+              <span style="color:darkorange">{{ rendered_value }}</span>
+            {% else value >= 75 %}
+              {{ rendered_value }}
+            {% endif %}
+      ;;
     }
     measure: count {
       type: count
     }
     measure: total_rows {
-      type: "sum"
-      sql: ${size};;
+      type: sum
+      sql: ${rows_in_table};;
     }
-    
+    measure: total_size {
+      description: "Size of the table(s), in 1 MB data blocks"
+      type: sum
+      sql: ${size} ;;
+    }
+
   }
-  
+
 view: redshift_query_execution {
-  sql_table_name: svl_query_summary ;;
+  #For recent queries based on redshift_queries
+  #description: "Steps from the query planner for recent queries to Redshift"
+  derived_table: {
+    # Insert into PDT because redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
+    sql_trigger_value: SELECT FLOOR((EXTRACT(epoch from GETDATE()) - 60*60*23)/(60*60*24)) ;; #23h
+    sql:
+        SELECT
+          query ||'.'|| seg || '.' || step as id,
+          query, seg, step,
+          label,
+          regexp_substr(label, '^[A-Za-z]+') as operation,
+          CASE WHEN label ilike 'scan%name=%' AND label not ilike '%Internal Worktable'
+              THEN substring(regexp_substr(label, 'name=(.+)$'),6)
+              ELSE NULL
+          END as "table",
+          CASE WHEN label ilike 'scan%tbl=%'
+              THEN '0'+COALESCE(substring(regexp_substr(label, 'tbl=([0-9]+)'),5),'')::int
+              ELSE NULL
+          END as "table_id",
+          MAX(is_diskbased) as is_diskbased,
+          MAX(is_rrscan) as is_rrscan,
+          AVG(avgtime) as avgtime,
+          MAX(maxtime) as maxtime,
+          SUM(workmem) as workmem,
+          SUM(rows_pre_filter) rows_pre_filter,
+          SUM(bytes) as bytes
+        FROM svl_query_summary
+        WHERE query>=(SELECT min(query) FROM ${redshift_queries.SQL_TABLE_NAME})
+        AND query<=(SELECT max(query) FROM ${redshift_queries.SQL_TABLE_NAME})
+        GROUP BY query, seg, step, label
+      ;;
+      distribution: "query"
+      sortkeys: ["query"]
+    }
   # or svl_query_report to not aggregate over slices under each step
+  #using group by because sometimes steps are duplicated.seems to be when some slices are diskbased, others not
   dimension: step {
     type:  string
-    sql: ${TABLE}.seg || "." || ${TABLE}.step ;;
+    sql: ${TABLE}.seg || '.' || ${TABLE}.step;;
+    value_format_name: decimal_2
+    order_by_field: step_sort
+  }
+  dimension: step_sort {
+    hidden:  yes
+    type: number
+    sql: ${TABLE}.seg*10000 + ${TABLE}.step;;
+  }
+  dimension: query {
+    type: number
+    sql: ${TABLE}.query ;;
+  }
+  dimension: id {
+    primary_key: yes
+    type: string
+    sql: ${TABLE}.id;;
   }
   dimension: label {
     type:  string
     sql: ${TABLE}.label ;;
   }
+  dimension: operation {
+    type:  string
+    sql: ${TABLE}.operation ;;
+  }
+  dimension: table {
+    type: string
+    sql: ${TABLE}.table ;;
+  }
+  dimension: table_id {
+    type: number
+    sql: ${TABLE}.table_id ;;
+  }
   dimension: was_diskbased {
-    type: yesno
+    type: string
     label: "Was disk-based?"
-    description: "Whether this step of the query was executed as a disk-based operation on any node in the cluster"
-    sql: ${TABLE}.is_diskbased ;;
+    description: "Whether this step of the query was executed as a disk-based operation on any slice in the cluster"
+    sql: CASE WHEN ${TABLE}.is_diskbased='t' THEN 'Yes' ELSE 'No' END;;
+    html:
+          {% if value == 'Yes' %}
+            <span style="color: darkred">{{ rendered_value }}</span>
+          {% else %}
+            {{ rendered_value }}
+          {% endif %}
+    ;;
+  }
+  dimension: was_restricted_scan {
+    type: yesno
+    label: "Was the scan range-restricted?"
+    description: "Whether this step of the query was executed as a disk-based operation on any slice in the cluster"
+    sql: CASE WHEN ${TABLE}.is_rrscan='t' THEN 'Yes' WHEN ${operation} = 'scan' THEN 'No' ELSE 'N/A' END;;
+    html:
+          {% if value == 'Yes' %}
+            <span style="color: green">{{ rendered_value }}</span>
+          {% else %}
+            {{ rendered_value }}
+          {% endif %}
+    ;;
+  }
+  dimension: step_average_slice_time {
+    type: number
+    sql: "Average time among slices, in seconds, for this step" ;;
+    sql: ${TABLE}.avgtime/1000000 ;;
+  }
+  dimension: step_max_slice_time {
+    type: number
+    sql: "Maximum time among slices, in seconds, for this step" ;;
+    sql: ${TABLE}.maxtime/1000000 ;;
+  }
+  dimension: step_skew {
+    type: number
+    description: "The ratio of max execution time vs avg execution time for this step among participating slices. (For information on how many slices participated in this step, check svl_query_report)"
+    sql: CASE WHEN ${TABLE}.avgtime=0 THEN NULL ELSE ${TABLE}.maxtime / ${TABLE}.avgtime END ;;
+    html:
+          {% if value > 16 %}
+            <span style="color: darkred">{{ rendered_value }}</span>
+          {% elsif value >4 %}
+            <span style="color: darkorange">{{ rendered_value }}</span>
+          {% else %}
+            {{ rendered_value }}
+          {% endif %}
+    ;;
+  }
+  dimension: working_memory {
+    type: number
+    description: "Amount of working memory (in bytes) assigned to the query step"
+    sql: ${TABLE}.workmem ;;
   }
   dimension: rows_out {
     type: number
-    description: "For scans of permanent tables, the total number of rows emitted (before filtering rows marked for deletion, a.k.a ghost rows)."
+    description: "For scans of permanent tables, the total number of rows emitted (before filtering rows marked for deletion, a.k.a ghost rows). If very different from Query Plan rows, stats should be updated"
     sql: ${TABLE}.rows_pre_filter ;;
   }
-  filter: query {
-    sql: <%condition%>${TABLE}.query<%endcondition%> ;;
+  dimension: bytes {
+    type: number
+    sql:  ${TABLE}.bytes ;;
+  }
+  measure:  count {
+    hidden: yes
+    type: count
+  }
+  measure: any_disk_based {
+    type: string
+    sql: MAX(${was_diskbased}) ;;
+    html:
+      {% if value == 'Yes' %}
+      <span style="color: darkred">{{ rendered_value }}</span>
+      {% else %}
+      {{ rendered_value }}
+      {% endif %}
+    ;;
+  }
+  measure: any_restricted_scan {
+    type: string
+    sql: MAX(${was_restricted_scan}) ;;
+    html:
+      {% if value == 'Yes' %}
+      <span style="color: green">{{ rendered_value }}</span>
+      {% elsif value == 'No' %}
+      <span style="color: darkorange">{{ rendered_value }}</span>
+      {% else %}
+      {{ rendered_value }}
+      {% endif %}
+    ;;
+  }
+  measure:  _count_restricted_scan {
+    hidden: yes
+    type:  sum
+    sql: CASE WHEN ${operation}='scan' AND ${table} IS NOT NULL AND ${TABLE}.is_rrscan='t' THEN 1 ELSE 0 END ;;
+  }
+  measure: count_scans {
+    type:sum
+    sql: CASE WHEN ${operation}='scan' AND ${table} IS NOT NULL THEN 1 ELSE 0 END ;;
+  }
+  measure: percent_restricted_scan {
+    type: number
+    sql: CASE WHEN ${count_scans} = 0 THEN NULL
+      ELSE ${_count_restricted_scan} / ${count_scans} END ;;
+    html:
+      {% if value <= 0.10 %}
+        <span style="color: darkred">{{ rendered_value }}</span>
+      {% elsif value <= 0.50 %}
+        <span style="color: darkorange">{{ rendered_value }}</span>
+      {% elsif value >= 0.90 %}
+        <span style="color: green">{{ rendered_value }}</span>
+      {% else %}
+        {{ rendered_value }}
+      {% endif %}
+    ;;
+    value_format_name: percent_1
+  }
+  measure: emitted_rows_to_table_rows_ratio {
+    type: number
+    sql: CASE WHEN SUM(${redshift_tables.rows_in_table}) = 0 OR ${count} = 0 THEN NULL
+      ELSE ${total_rows_emitted} / (${redshift_tables.total_rows} * ${count}) END ;;
+    # Using hard-coded SUM to avoid unneccessary symmetric aggregate just to check SUM <> 0
+    value_format_name: percent_1
+  }
+#   measure: estimated_unused_scanned_bytes {
+#     type: number
+#     sql: ${total_bytes_scanned} * (1 - ${emitted_rows_to_table_rows_ratio})  ;;
+#   }
+  measure: total_bytes_distributed {
+    type: sum
+    sql: CASE WHEN ${operation} = 'dist' THEN ${bytes} ELSE 0 END ;;
+  }
+  measure: total_bytes_broadcast {
+    type: sum
+    sql: CASE WHEN ${operation} = 'bcast' THEN ${bytes} ELSE 0 END ;;
+  }
+  measure: total_bytes_scanned {
+    type: sum
+    sql: CASE WHEN ${TABLE}.operation = 'scan' THEN ${bytes} ELSE 0 END ;;
+  }
+  measure: total_rows_emitted {
+    type: sum
+    sql: CASE WHEN ${operation} = 'scan' THEN ${rows_out} ELSE 0 END ;;
+  }
+  measure: total_O_rows_sorted {
+    hidden: yes
+    type: sum
+    sql: CASE
+        WHEN  ${operation} = 'sort' THEN
+          CASE WHEN ${rows_out}<=1 THEN 1 ELSE ${rows_out} * LN(${rows_out}) / LN(2) END
+        ELSE 0
+      END ;;
+  }
+  measure: total_rows_sorted_approx {
+    type: number
+    description: "Aggregates multiple n log(n) time-complexity sortings by comparing them to one sort that would have approximately the same time complexity"
+    #http://cs.stackexchange.com/questions/44944/n-log-n-c-what-are-some-good-approximations-of-this
+    #1st answer with an added first order Newton approximation
+    # https://docs.google.com/a/looker.com/spreadsheets/d/1mT3rddVH61KQzeULjfWVtnkweZ_gsCmeMhOFB8T1elo/edit?usp=sharing
+    sql:CASE WHEN ${total_O_rows_sorted}<2 THEN ${total_O_rows_sorted}
+    ELSE LN(2)*${total_O_rows_sorted}*(1+LN(ln((${total_O_rows_sorted}/LN(${total_O_rows_sorted})*LN(2)))/LN(2))/LN(2)/(LN((${total_O_rows_sorted}/LN(${total_O_rows_sorted})*LN(2)))/LN(2)))/LN(${total_O_rows_sorted})
+    END;;
+    value_format_name: decimal_0
+  }
+  measure: max_step_skew {
+    type: max
+    sql: ${step_skew} ;;
+  }
+  measure: average_step_skew {
+    type: average
+    sql: ${step_skew} ;;
   }
 }
