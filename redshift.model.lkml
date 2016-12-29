@@ -1,12 +1,10 @@
-# preliminaries #
-#
-# make sure this is a connection where the database user has access to pg_admin tables
+# # https://github.com/llooker/blocks_redshift_admin
+# #
+# # Make sure this is a connection where the database user has access to pg_admin tables
 connection: "YOUR_CONNECTION_HERE"
-
 case_sensitive: no
 
 include: "redshift_*dashboard"
-
 include: "redshift_*view"
 
 explore: redshift_tables {
