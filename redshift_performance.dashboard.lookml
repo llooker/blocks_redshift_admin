@@ -26,7 +26,7 @@
   - name: query_time_histogram
     title: "Query time histogram"
     type: looker_column
-    model: meta
+    model: redshift_model
     explore: redshift_queries
     dimensions: [redshift_queries.time_executing_roundup5]
     measures: [redshift_queries.count]
@@ -66,7 +66,7 @@
   - name: longest_queries
     title: "Top 10 longest running queries"
     type: table
-    model: meta
+    model: redshift_model
     explore: redshift_queries
     dimensions: [redshift_queries.query, redshift_queries.substring, redshift_queries.time_executing_roundup1]
     sorts: [redshift_queries.time_executing_roundup1 desc]
@@ -95,7 +95,7 @@
   - name: network_distribution_piechart
     title: Network distribution breakdown
     type: looker_pie
-    model: meta
+    model: redshift_model
     explore: redshift_plan_steps
     dimensions: [redshift_plan_steps.network_distribution_type]
     measures: [redshift_queries.total_time_executing]
@@ -126,7 +126,7 @@
   - name: network_distribution_top_joins
     title: Top Network Distribution Operations
     type: table
-    model: meta
+    model: redshift_model
     explore: redshift_plan_steps
     dimensions: [redshift_plan_steps.network_distribution_type, redshift_plan_steps.operation_argument]
     measures: [redshift_queries.count, redshift_queries.total_time_executing, redshift_queries.time_executing_per_query]
@@ -176,7 +176,7 @@
   - name: queries_and_queued_per_hour
     title: Queries submitted & queued by hour
     type: looker_line
-    model: meta
+    model: redshift_model
     explore: redshift_queries
     dimensions: [redshift_queries.start_hour]
     fill_fields: [redshift_queries.start_hour]

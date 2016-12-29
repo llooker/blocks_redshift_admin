@@ -7,6 +7,19 @@ case_sensitive: no
 include: "redshift_*dashboard"
 include: "redshift_*view"
 
+explore: redshift_data_loads {
+   hidden: yes
+}
+
+explore: redshift_db_space {
+  label: "DB Space"
+}
+
+explore: redshift_etl_errors {
+   hidden: yes
+  label: "ETL Errors"
+}
+
 explore: redshift_tables {
   hidden: yes
   persist_for: "0 seconds"
@@ -104,3 +117,4 @@ explore: redshift_query_execution {
   persist_for: "0 seconds"
   fields: [ALL_FIELDS*, -redshift_query_execution.emitted_rows_to_table_rows_ratio]
 }
+

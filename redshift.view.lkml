@@ -412,7 +412,7 @@ view: redshift_queries {
     primary_key: yes
     link: {
       label: "Inspect"
-      url: "/dashboards/meta::redshift_query_inspection?query={{value}}"
+      url: "/dashboards/redshift_model::redshift_query_inspection?query={{value}}"
     }
   }
   dimension_group: start {
