@@ -1,23 +1,3 @@
-view: redshift_pg_views {
-  sql_table_name: pg_views ;;
-  # dimensions #
-
-  dimension: definition {
-    type: string
-    sql: ${TABLE}.definition ;;
-  }
-
-  dimension: schema {
-    type: string
-    sql: ${TABLE}.schemaname ;;
-  }
-
-  dimension: view {
-    type: string
-    sql: ${TABLE}.viewname ;;
-  }
-}
-
 view: redshift_db_space {
   derived_table: {
     sql: select name as table
@@ -44,29 +24,22 @@ view: redshift_db_space {
       group by 1,2
        ;;
   }
-
-  # dimensions #
-
   dimension: table {
     type: string
     sql: ${TABLE}.table ;;
   }
-
   dimension: schema {
     type: string
     sql: ${TABLE}.schema ;;
   }
-
   dimension: megabytes {
     type: number
     sql: ${TABLE}.megabytes ;;
   }
-
   dimension: rows {
     type: number
     sql: ${TABLE}.rows ;;
   }
-
   dimension: table_stem {
     sql: case
         when (${table} ~ '(lr|lc)\\$[a-zA-Z0-9]+_.*')
@@ -75,19 +48,14 @@ view: redshift_db_space {
       end
        ;;
   }
-
-  # measures #
-
   measure: total_megabytes {
     type: sum
     sql: ${megabytes} ;;
   }
-
   measure: total_rows {
     type: sum
     sql: ${rows} ;;
   }
-
   measure: total_tables {
     type: count_distinct
     sql: ${table} ;;
@@ -222,14 +190,13 @@ view: redshift_plan_steps {
         substring(regexp_substr(plannode,'\\.\\.[0-9]+'),3) as cost_hi,
         CASE
           WHEN COALESCE(parentid,0)=0 THEN 'root'
-          WHEN nodeid = MIN(nodeid) OVER (PARTITION BY query,parentid) THEN 'inner'
+          WHEN nodeid = MAX(nodeid) OVER (PARTITION BY query,parentid) THEN 'inner'
           ELSE 'outer'
         END::CHAR(5) as inner_outer
       FROM stl_explain
       WHERE query>=(SELECT min(query) FROM ${redshift_queries.SQL_TABLE_NAME})
         AND query<=(SELECT max(query) FROM ${redshift_queries.SQL_TABLE_NAME})
     ;;
-    #TODO: Triple check inner/outer vs min/max nodeid pairing
     #TODO?: Currently not extracting the sequential scan column, but I'm not sure if this is useful to extract. What's more useful as far as I can tell are the fields in the filter (operation argument)
     distribution: "query"
     sortkeys: ["query"]
@@ -516,11 +483,11 @@ view: redshift_queries {
     description: "Sum of time that queries took (both queued and executing), in seconds"
     sql: ${time_in_queue} + ${time_executing}  ;;
   }
-#   measure: total_time_elapsed {
-#     type: sum
-#     description: "Sum of time from another table, for comparison"
-#     sql: ${time_elapsed}  ;;
-#   }
+  #   measure: total_time_elapsed {
+  #     type: sum
+  #     description: "Sum of time from another table, for comparison"
+  #     sql: ${time_elapsed}  ;;
+  #   }
   measure: time_executing_per_query {
     type: number
     sql: CASE WHEN ${count}<>0 THEN ${total_time_executing} / ${count} ELSE NULL END ;;
@@ -938,10 +905,6 @@ view: redshift_query_execution {
     # Using hard-coded SUM to avoid unneccessary symmetric aggregate just to check SUM <> 0
     value_format_name: percent_1
   }
-#   measure: estimated_unused_scanned_bytes {
-#     type: number
-#     sql: ${total_bytes_scanned} * (1 - ${emitted_rows_to_table_rows_ratio})  ;;
-#   }
   measure: total_bytes_distributed {
     type: sum
     sql: CASE WHEN ${operation} = 'dist' THEN ${bytes} ELSE 0 END ;;
