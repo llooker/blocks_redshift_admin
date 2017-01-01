@@ -4,8 +4,8 @@
 connection: "YOUR_CONNECTION_HERE"
 case_sensitive: no
 
-include: "redshift_*dashboard"
-include: "redshift_*view"
+include: "redshift_*.dashboard"
+include: "redshift_*.view"
 
 explore: redshift_data_loads {
    hidden: yes
