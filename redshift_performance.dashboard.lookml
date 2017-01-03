@@ -10,11 +10,6 @@
     - elements: [network_distribution_piechart,network_distribution_top_joins]
       height: 300
       
-    - elements: [db_header]
-      height: 100
-    - elements: []
-      height: 300
-      
     - elements: [capacity_header]
       height: 100
     - elements: [queries_and_queued_per_hour]
