@@ -16,15 +16,11 @@
 The model is very self contained, with no references to other views/models, and all global object names prefixed with "redshift_". As a result, implementation should be straight-forward:
 
 - Copy the view and dashboard files into your project
-- Either:
-	- Copy the model file into your project and set the connection
-	- Or, splice the model file contents (except connection) into an existing model file on your redshift connection
-- Search and replace your model name. Search for "meta" (You can use regular expressions to limit to whole word matches with "\bmeta\b")
-	- Dashboards elements will contain references to the model name
-	- Links to dashboards will contain references to the model name (in particular, from the dimension redshift_queries.query)
-- Unhide any explores that you want to be visible from your explore menu
+- Copy the model file into your project and set the connection
+	- Alternately, you can splice the model file contents (except connection) into an existing model file that uses your redshift connection. Then search and replace your model name. Search for "redshift_model"
+- Optionally unhide any explores that you want to be visible from your explore menu
 
-# Great! Now what? ##
+## Great! Now what? ##
 
 Identify hotspots from the performance dashboard, and drill into the query inspection to pinpoint causes. Here are typical problems and associated fixes
 - Do queries contain unintentional Nested Loops, especially with large tables? Understand how a hash join works and correct any join predicates that prevent hash joins
