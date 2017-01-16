@@ -17,8 +17,11 @@ The model is very self contained, with no references to other views/models, and 
 
 - Copy the view and dashboard files into your project
 - Copy the model file into your project and set the connection
-	- Alternately, you can splice the model file contents (except connection) into an existing model file that uses your redshift connection. Then search and replace your model name. Search for "redshift_model"
-	- Note that the connection and its associated user in Redshift have an impact on the results of reports. Some of the admin views are only available to superusers, and all of the views return information specific to the user if not a super user. So choose your connection based on your needs for the block - to explore just the activity of the Looker Redshift user, or all Redshift users' activity.
+	- The connection and its associated user in Redshift have an impact on the results of reports. Some of the admin views are only available to superusers, and all of the views return information specific to the user if not a super user. So choose your connection based on your needs for the block:
+		- With a separate superuser connection: To view all activity on Redshift
+		- With a standard connection: To view all Looker activity on Redshift
+		- With a [parameterized connection](https://discourse.looker.com/t/parameterizing-connections-with-user-attributes/3986): For each end user to view activity from the specific connection as parameterized
+	- Alternately, you can splice the model file contents into an existing model file that uses your redshift connection. Then search and replace your model name. Search for "redshift_model"
 - Optionally unhide any explores that you want to be visible from your explore menu
 
 ## Great! Now what? ##
