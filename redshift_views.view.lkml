@@ -573,6 +573,15 @@ view: redshift_tables {
       type: string
       sql: ${TABLE}."table" ;;
     }
+    dimension: table_join_key {
+        hidden:yes
+        type:string
+        sql: CASE WHEN ${schema}='looker_scratch'
+                THEN 'name:'||${table}
+                ELSE 'id:'||${table_id}
+             END ;;
+        #Because when PDTs get rebuilt, their ID changes, and showing the info about the current PDT is more useful than showing nothing
+    }
     dimension: id {
       sql: ${database}||'.'||${schema}||'.'||${table} ;;
       primary_key: yes
@@ -724,9 +733,17 @@ view: redshift_query_execution {
               ELSE NULL
           END as "table",
           CASE WHEN label ilike 'scan%tbl=%'
-              THEN '0'+COALESCE(substring(regexp_substr(label, 'tbl=([0-9]+)'),5),'')::int
+              THEN ('0'+COALESCE(substring(regexp_substr(label, 'tbl=([0-9]+)'),5),''))::int
               ELSE NULL
           END as "table_id",
+          CASE WHEN label ilike 'scan%tbl=%'
+               THEN CASE WHEN label ilike '%name=%LR$%'
+                         THEN 'name:'||substring(regexp_substr(label, 'name=(.+)$'),6)
+                         ELSE 'id:'||COALESCE(substring(regexp_substr(label, 'tbl=([0-9]+)'),5),'')
+                         END
+               ELSE NULL
+               END
+          as "table_join_key",
           MAX(is_diskbased) as is_diskbased,
           MAX(is_rrscan) as is_rrscan,
           AVG(avgtime) as avgtime,
@@ -779,6 +796,11 @@ view: redshift_query_execution {
   dimension: table_id {
     type: number
     sql: ${TABLE}.table_id ;;
+  }
+  dimension: table_join_key {
+    hidden: yes
+    type: string
+    sql: ${TABLE}.table_join_key;;
   }
   dimension: was_diskbased {
     type: string

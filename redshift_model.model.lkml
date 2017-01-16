@@ -25,7 +25,7 @@ explore: redshift_tables {
   persist_for: "0 seconds"
   view_label: "[Redshift Tables]"
   join: redshift_query_execution {
-    sql_on: ${redshift_query_execution.table_id} = ${redshift_tables.table_id} ;;
+    sql_on: ${redshift_query_execution.table_join_key}=${redshift_tables.table_join_key};;
     relationship: one_to_many
     type: left_outer
     fields: [
