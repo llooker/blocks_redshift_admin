@@ -4,7 +4,7 @@
 - Dashboards
 	- *Performance overview* to see longest running queries, bad join patterns, red flags on table settings, and capacity metrics, and to drill into lists of related queries
 	- *Query inspection* to get both-high level metrics about a particular query's resource usage, as well as query plan and step by step resources
-	- *Admin dashboard* to review ETL history and errors, tables, and capacity
+	- [*Admin dashboard*](https://discourse.looker.com/t/analytic-block-redshift-admin/2079) to review ETL history and errors, tables, and capacity
 - Explores
 	- Tables
 	- Queries for the past day
@@ -17,12 +17,14 @@ The model is very self contained, with no references to other views/models, and 
 
 - Copy the view and dashboard files into your project
 - Copy the model file into your project and set the connection
-	- The connection and its associated user in Redshift have an impact on the results of reports. Some of the admin views are only available to superusers, and all of the views return information specific to the user if not a super user. So choose your connection based on your needs for the block:
-		- With a separate superuser connection: To view all activity on Redshift
-		- With a standard connection: To view all Looker activity on Redshift
-		- With a [parameterized connection](https://discourse.looker.com/t/parameterizing-connections-with-user-attributes/3986): For each end user to view activity from the specific connection as parameterized
 	- Alternately, you can splice the model file contents into an existing model file that uses your redshift connection. Then search and replace your model name. Search for "redshift_model"
-- Optionally unhide any explores that you want to be visible from your explore menu
+- The connection and its associated user in Redshift have an impact on the results of reports. Views return information specific to the user if not a super user. So choose your connection based on your needs for the block:
+	- With a separate superuser connection: To view all activity on Redshift, and to use the redshift_db_space explore
+	- With a standard connection: To view Looker activity on Redshift
+	- With a [parameterized connection](https://discourse.looker.com/t/parameterizing-connections-with-user-attributes/3986): For each end user to view activity from the specific connection as parameterized
+- If not using a super-user connection, grant the SELECT privilege on [STV_WLM_SERVICE_CLASS_CONFIG](http://docs.aws.amazon.com/redshift/latest/dg/r_STV_WLM_SERVICE_CLASS_CONFIG.html) and [SVV_TABLE_INFO](http://docs.aws.amazon.com/redshift/latest/dg/r_SVV_TABLE_INFO.html)
+- Optional: Unhide any explores that you want to be visible from your explore menu
+- Optional: Adjust time of day that PDT's rebuild
 
 ## Great! Now what? ##
 
