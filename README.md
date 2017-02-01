@@ -28,6 +28,7 @@ The model is very self contained, with no references to other views/models, and 
 	- [Parameterized connections](https://discourse.looker.com/t/parameterizing-connections-with-user-attributes/3986) currently do not support PDTs, and will not work with the block.
 - Optional: Unhide any explores that you want to be visible from your explore menu
 - Optional: Adjust time of day that PDT's rebuild
+- Warning: If you see errors in your project, doublecheck your other models to ensure they aren't indiscriminantly including all the dashboards/views in your project. If they are, modify their include statements to only include dashboards/views that make sense in those models. (You can leverage file prefixes for better model organization.)
 
 ## Great! Now what? ##
 
