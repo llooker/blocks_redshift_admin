@@ -57,7 +57,7 @@
     type: table
     model: redshift_model
     explore: redshift_db_space
-    dimensions: [db_space.schema, db_space.table_stem]
+    dimensions: [redshift_db_space.schema, redshift_db_space.table_stem]
     measures: [redshift_db_space.total_rows, redshift_db_space.total_megabytes, redshift_db_space.total_tables]
     sorts: [redshift_db_space.total_megabytes desc]
     show_view_names: true
