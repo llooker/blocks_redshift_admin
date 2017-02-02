@@ -153,13 +153,6 @@
       show_hide: show
       first_last: first
       num_rows: '20'
-
-    
-  - name: db_header
-    type: text
-    title_text: "DB Design"
-    subtitle_text: ""
-    body_text: ""
     
     
   - name: capacity_header
