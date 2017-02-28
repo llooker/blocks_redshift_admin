@@ -21,7 +21,11 @@ The model is very self contained, with no references to other views/models, and 
 - The connection and its associated user in Redshift have an impact on the results of reports. Choose your connection based on your needs for the block:
 	- (Recommended) With a standard connection
 		- This will allow you to view all activity issued from that connection (so normally all Looker activity)
-		- Grant the SELECT privilege on [STV_WLM_SERVICE_CLASS_CONFIG](http://docs.aws.amazon.com/redshift/latest/dg/r_STV_WLM_SERVICE_CLASS_CONFIG.html) and [SVV_TABLE_INFO](http://docs.aws.amazon.com/redshift/latest/dg/r_SVV_TABLE_INFO.html)
+		- Grant the SELECT privilege on:
+			- [STV_WLM_SERVICE_CLASS_CONFIG](http://docs.aws.amazon.com/redshift/latest/dg/r_STV_WLM_SERVICE_CLASS_CONFIG.html)
+			- [SVV_TABLE_INFO](http://docs.aws.amazon.com/redshift/latest/dg/r_SVV_TABLE_INFO.html)
+			- [STV_TBL_PERM](http://docs.aws.amazon.com/redshift/latest/dg/r_STV_TBL_PERM.html)
+			- [STV_BLOCKLIST](http://docs.aws.amazon.com/redshift/latest/dg/r_STV_BLOCKLIST.html)
 	- With a separate superuser connection
 		- This will allow you to view all activity on Redshift across users, and to use the redshift_db_space explore
 		- Note that when creating a superuser connection, Looker users with (develop or sql_runner permissions AND with access to the model) or with manage_models would be able to run arbitrary queries through the super-user connection.
