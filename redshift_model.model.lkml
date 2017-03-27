@@ -1,6 +1,7 @@
 # # https://github.com/llooker/blocks_redshift_admin
 # #
-# # Make sure this is a connection where the database user has access to pg_admin tables
+# # Make sure this is a connection where the database user has sufficient permissions (per above link)
+
 connection: "YOUR_CONNECTION_HERE"
 case_sensitive: no
 
@@ -12,12 +13,11 @@ explore: redshift_data_loads {
 }
 
 explore: redshift_db_space {
-  label: "DB Space"
+  hidden: yes
 }
 
 explore: redshift_etl_errors {
-   hidden: yes
-  label: "ETL Errors"
+  hidden: yes
 }
 
 explore: redshift_tables {

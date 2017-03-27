@@ -1,5 +1,3 @@
-# make sure to update the model: YOUR_MODEL_NAME references below with your actual model name
-
 - dashboard: redshift_admin
   title: 'Redshift Admin'
   layout: tile
