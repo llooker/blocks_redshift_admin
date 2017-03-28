@@ -726,12 +726,12 @@ view: redshift_query_execution {
         SELECT
           query ||'.'|| seg || '.' || step as id,
           query, seg, step,
-          label,
-          regexp_substr(label, '^[A-Za-z]+') as operation,
+          label::varchar,
+          regexp_substr(label, '^[A-Za-z]+')::varchar as operation,
           CASE WHEN label ilike 'scan%name=%' AND label not ilike '%Internal Worktable'
               THEN substring(regexp_substr(label, 'name=(.+)$'),6)
               ELSE NULL
-          END as "table",
+          END::varchar as "table",
           CASE WHEN label ilike 'scan%tbl=%'
               THEN ('0'+COALESCE(substring(regexp_substr(label, 'tbl=([0-9]+)'),5),''))::int
               ELSE NULL
@@ -742,7 +742,7 @@ view: redshift_query_execution {
                          ELSE 'id:'||COALESCE(substring(regexp_substr(label, 'tbl=([0-9]+)'),5),'')
                          END
                ELSE NULL
-               END
+               END::varchar
           as "table_join_key",
           MAX(is_diskbased) as is_diskbased,
           MAX(is_rrscan) as is_rrscan,
