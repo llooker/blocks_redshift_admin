@@ -16,7 +16,7 @@
 The model is very self contained, with no references to other views/models, and all global object names prefixed with "redshift_". As a result, implementation should be straight-forward:
 
 - Copy the view and dashboard files into your project
-	- If your scratch schema is not called `looker_scratch`, search for `looker_scratch` within the view file and replace replace it with the name of your scratch schema 
+	- If your scratch schema is not called `looker_scratch`, search for `looker_scratch` within the view file and replace it with the name of your scratch schema 
 - Copy the model file into your project and set the connection
 	- Alternately, you can splice the model file contents into an existing model file that uses your redshift connection. Then search and replace your model name. Search for "redshift_model"
 - The connection and its associated user in Redshift have an impact on the results of reports. Choose your connection based on your needs for the block:
