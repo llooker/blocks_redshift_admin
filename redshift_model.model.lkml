@@ -2,7 +2,7 @@
 # #
 # # Make sure this is a connection where the database user has sufficient permissions (per above link)
 
-connection: "dw"
+connection: "dw_admin"
 case_sensitive: no
 
 include: "redshift_*.dashboard"
