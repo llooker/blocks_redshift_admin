@@ -830,12 +830,12 @@ view: redshift_query_execution {
   }
   dimension: step_average_slice_time {
     type: number
-    sql: "Average time among slices, in seconds, for this step" ;;
+    description: "Average time among slices, in seconds, for this step"
     sql: ${TABLE}.avgtime/1000000 ;;
   }
   dimension: step_max_slice_time {
     type: number
-    sql: "Maximum time among slices, in seconds, for this step" ;;
+    description: "Maximum time among slices, in seconds, for this step"
     sql: ${TABLE}.maxtime/1000000 ;;
   }
   dimension: step_skew {
