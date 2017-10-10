@@ -6,7 +6,7 @@
 
   filters:
   - name: query
-    type: field_filter
+    type: number_filter
     explore: redshift_queries
     field: redshift_queries.query
     default: 0
