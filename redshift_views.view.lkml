@@ -121,7 +121,7 @@ view: redshift_data_loads {
       from stl_load_commits
        ;;
   }
-  
+
   dimension: root_bucket {
     type: string
     sql: ${TABLE}.root_bucket ;;
@@ -349,7 +349,8 @@ view: redshift_queries {
   # Recent is last 24 hours of queries
   # (we only see queries related to our rs user_id)
   derived_table: {
-    sql_trigger_value: SELECT FLOOR((EXTRACT(epoch from GETDATE()) - 60*60*22)/(60*60*24)) ;; #22h
+    sql_trigger_value: SELECT FLOOR(EXTRACT(MINUTE from GETDATE())) ;;
+    # sql_trigger_value: SELECT FLOOR((EXTRACT(epoch from GETDATE()) - 60*60*22)/(60*60*24)) ;; #22h
     sql: SELECT
         wlm.query,
         q.substring::varchar,
@@ -364,7 +365,7 @@ view: redshift_queries {
       LEFT JOIN STV_WLM_SERVICE_CLASS_CONFIG sc ON sc.service_class=wlm.service_class -- Remove this line if access was not granted
       LEFT JOIN SVL_QLOG q on q.query=wlm.query
       LEFT JOIN STL_QUERY qlong on qlong.query=q.query
-      WHERE wlm.service_class_start_time >= dateadd(day,-1,GETDATE())
+      WHERE wlm.service_class_start_time >= dateadd(day,-7,GETDATE())
       AND wlm.service_class_start_time <= GETDATE()
       --WHERE wlm.query>=(SELECT MAX(query)-5000 FROM STL_WLM_QUERY)
     ;;
@@ -379,12 +380,12 @@ view: redshift_queries {
     primary_key: yes
     link: {
       label: "Inspect"
-      url: "/dashboards/redshift_model::redshift_query_inspection?query={{value}}"
+      url: "/dashboards/29?query={{value}}"
     }
   }
   dimension_group: start {
     type: time
-    timeframes: [raw, minute15, hour, day_of_week, date]
+    timeframes: [raw, minute,second, minute15, hour, hour_of_day, day_of_week, date]
     sql: ${TABLE}.start_time ;;
   }
   dimension: service_class {
@@ -876,6 +877,8 @@ view: redshift_query_execution {
     html:
       {% if value == 'Yes' %}
       <span style="color: darkred">{{ rendered_value }}</span>
+      {% elsif value == 'No' %}
+      <span style="color: green">{{ rendered_value }}</span>
       {% else %}
       {{ rendered_value }}
       {% endif %}
