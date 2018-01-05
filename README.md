@@ -48,6 +48,11 @@
 
 Check our [Looker Discourse article](https://discourse.looker.com/t/optimizing-redshift-performance-with-lookers-redshift-block/4110) for an overview of common performance issues, and suggestions to resolve them.
 
+### What if I find an error? Suggestions for improvements?
+
+Great! Blocks were designed for continuous improvement through the help of the entire Looker community, and we'd love your input. To log an error or improvement recommentation, simply create a "New Issue" in the corresponding [Github repo for this Block](https://github.com/llooker/blocks_redshift_admin/issues). Please be as detailed as possible in your explanation, and we'll address it as quick as we can.
+
+
 ### Known Issues
 
 - Sometimes, drilling into a list of queries doesn't return any records. As far as we can tell, this is due to categorically wrong result sets from Redshift for certain where filters. As a workaround, remove some filters, such as redshift_tables.sortkey1_enc
