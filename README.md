@@ -10,7 +10,7 @@
 
 
 
-### Redshift Systems Data Structure
+### Redshift System Tables Data Structure
 
 * Redshift comes with System Tables, which provide metadata around database performance and operations. These tables come natively, with the same table structures, for each Redshift instance. More information on System Tables can be found in [AWS documentation](https://docs.aws.amazon.com/redshift/latest/dg/c_intro_system_tables.html).
 
