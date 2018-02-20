@@ -24,9 +24,9 @@
 
 ### Implementation Instructions / Customizations ##
 
-* ** Where to deploy it ** 
-    - **Separate Project ** (Recommended) - Since this model has little to no need to share views with the primary model, keeping it as its own project makes for the most convenient isolation of concerns.
-    - **Existing Project ** - Make sure that other models do not contain include: "*.dashboard.lkml", as these will attempt to include the Redshift dashboards into existing models in which they do not make sense and will cause errors.
+* **Where to deploy it** 
+    - **Separate Project** (Recommended) - Since this model has little to no need to share views with the primary model, keeping it as its own project makes for the most convenient isolation of concerns.
+    - **Existing Project** - Make sure that other models do not contain include: "*.dashboard.lkml", as these will attempt to include the Redshift dashboards into existing models in which they do not make sense and will cause errors.
 
 * **Connection and Permission** 
     - [Grant](http://docs.aws.amazon.com/redshift/latest/dg/r_GRANT.html) the SELECT privilege on:
