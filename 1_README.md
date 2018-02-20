@@ -31,7 +31,7 @@
 * **Connection and Permission** - The connection and its associated user in Redshift have an impact on the results of reports. Choose your connection based on your needs for the block:
   * **Standard** - (Recommended) With a standard connection
     - This will allow you to view all activity issued from that connection (so normally all Looker activity)
-    - Grant the SELECT privilege on:
+    - [Grant](http://docs.aws.amazon.com/redshift/latest/dg/r_GRANT.html) the SELECT privilege on:
       - [STV_WLM_SERVICE_CLASS_CONFIG](http://docs.aws.amazon.com/redshift/latest/dg/r_STV_WLM_SERVICE_CLASS_CONFIG.html)
       - [SVV_TABLE_INFO](http://docs.aws.amazon.com/redshift/latest/dg/r_SVV_TABLE_INFO.html)
       - [STV_TBL_PERM](http://docs.aws.amazon.com/redshift/latest/dg/r_STV_TBL_PERM.html)
