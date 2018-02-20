@@ -6,10 +6,12 @@
 
   filters:
   - name: query
-    type: field_filter
-    explore: redshift_queries
-    field: redshift_queries.query
-    # default: 0
+    type: number_filter
+    # Commented out due to reported but unreproduced reports of errors with this. (issues/21)
+	# Feel free to re-enable in specific implementations
+    #type: field_filter
+    #explore: redshift_queries
+    #field: redshift_queries.query
 
   elements:
   - name: time_executing
