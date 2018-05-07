@@ -365,7 +365,7 @@ view: redshift_queries {
       LEFT JOIN STV_WLM_SERVICE_CLASS_CONFIG sc ON sc.service_class=wlm.service_class -- Remove this line if access was not granted
       LEFT JOIN SVL_QLOG q on q.query=wlm.query
       LEFT JOIN STL_QUERY qlong on qlong.query=q.query
-      WHERE wlm.service_class_start_time >= dateadd(day,-7,GETDATE())
+      WHERE wlm.service_class_start_time >= dateadd(day,-1,GETDATE())
       AND wlm.service_class_start_time <= GETDATE()
       --WHERE wlm.query>=(SELECT MAX(query)-5000 FROM STL_WLM_QUERY)
     ;;
