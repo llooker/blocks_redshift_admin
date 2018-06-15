@@ -121,7 +121,7 @@ view: redshift_data_loads {
       from stl_load_commits
        ;;
   }
-  
+
   dimension: root_bucket {
     type: string
     sql: ${TABLE}.root_bucket ;;
@@ -830,12 +830,12 @@ view: redshift_query_execution {
   }
   dimension: step_average_slice_time {
     type: number
-    sql: "Average time among slices, in seconds, for this step" ;;
+    description: "Average time among slices, in seconds, for this step"
     sql: ${TABLE}.avgtime/1000000 ;;
   }
   dimension: step_max_slice_time {
     type: number
-    sql: "Maximum time among slices, in seconds, for this step" ;;
+    description: "Maximum time among slices, in seconds, for this step"
     sql: ${TABLE}.maxtime/1000000 ;;
   }
   dimension: step_skew {
@@ -970,5 +970,57 @@ view: redshift_query_execution {
   measure: average_step_skew {
     type: average
     sql: ${step_skew} ;;
+  }
+}
+
+view: locks {
+  derived_table: {
+    sql: select
+          c.relname,
+          l.database,
+          l.pid,
+          a.usename,
+          l.mode,
+          l.granted,
+          a.current_query,
+          l.pid = pg_backend_pid() as is_pg_backend
+        from pg_locks l
+        join pg_catalog.pg_class c ON c.oid = l.relation
+        join pg_catalog.pg_stat_activity a ON a.procpid = l.pid
+       ;;
+  }
+  dimension: current_query {
+    type: string
+    sql: ${TABLE}.current_query ;;
+  }
+  dimension: relname {
+    label: "Table Name"
+    type: string
+    sql: ${TABLE}.relname ;;
+  }
+  dimension: database {
+    type: string
+    sql: ${TABLE}.database ;;
+  }
+  dimension: pid {
+    label: "Process Sys Id"
+    type: string
+    sql: ${TABLE}.pid ;;
+  }
+  dimension: usename {
+    type: string
+    sql: ${TABLE}.usename ;;
+  }
+  dimension: mode {
+    type: string
+    sql: ${TABLE}.mode ;;
+  }
+  dimension: granted {
+    type: string
+    sql: ${TABLE}.granted ;;
+  }
+  dimension: is_pg_backend {
+    type: string
+    sql: ${TABLE}.is_pg_backend ;;
   }
 }

@@ -9,7 +9,6 @@
     type: field_filter
     explore: redshift_queries
     field: redshift_queries.query
-    default: 0
 
   elements:
   - name: time_executing
@@ -157,7 +156,7 @@
     type: single_value
     height: 3
     width: 8
-    title: 
+    title:
     model: redshift_model
     explore: redshift_query_execution
     measures: [redshift_query_execution.total_bytes_broadcast, redshift_query_execution.total_bytes_distributed,
@@ -205,7 +204,7 @@
     type: single_value
     height: 3
     width: 8
-    title: 
+    title:
     model: redshift_model
     explore: redshift_query_execution
     measures: [redshift_query_execution.total_bytes_broadcast, redshift_query_execution.total_bytes_distributed,
@@ -253,7 +252,7 @@
     type: single_value
     height: 3
     width: 8
-    title: 
+    title:
     model: redshift_model
     explore: redshift_query_execution
     measures: [redshift_query_execution.total_bytes_broadcast, redshift_query_execution.total_bytes_distributed,
@@ -298,12 +297,12 @@
     single_value_title: Rows sorted
     hidden_fields: [redshift_query_execution.total_bytes_broadcast, redshift_query_execution.total_bytes_distributed,
       redshift_query_execution.total_bytes_scanned]
-      
+
   - name: was_disk_based
     type: single_value
     height: 3
     width: 8
-    title: 
+    title:
     model: redshift_model
     explore: redshift_query_execution
     measures: [redshift_query_execution.total_bytes_broadcast, redshift_query_execution.total_bytes_distributed,
@@ -409,7 +408,7 @@
       redshift_plan_steps.network_distribution_type, redshift_plan_steps.operation_argument,
       redshift_plan_steps.table, redshift_plan_steps.rows, redshift_plan_steps.bytes]
     listen:
-      query: redshift_plan_steps.query 
+      query: redshift_plan_steps.query
     sorts: [redshift_plan_steps.step]
     limit: '2000'
     column_limit: '50'

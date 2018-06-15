@@ -63,3 +63,17 @@
     width: 12
     height: 4
     limit: 500
+
+  - name: locks
+    title: 'Table Locks'
+    type: table
+    model: redshift_model
+    explore: locks
+    dimensions: [locks.relname, locks.usename, locks.mode, locks.granted, locks.is_pg_backend]
+    measures: []
+    sorts: []
+    show_view_names: true
+    show_row_numbers: true
+    width: 12
+    height: 4
+    limit: 500
