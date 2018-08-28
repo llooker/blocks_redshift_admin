@@ -354,7 +354,7 @@ view: redshift_queries {
         wlm.query,
         q.substring::varchar,
         sc.name as service_class,
-        --wlm.service_class as service_class --Use if connection was not given access to STV_WLM_SERVICE_CLASS_CONFIG
+        --wlm.service_class as service_class, --Use if connection was not given access to STV_WLM_SERVICE_CLASS_CONFIG
         wlm.service_class_start_time as start_time,
         wlm.total_queue_time,
         wlm.total_exec_time,
