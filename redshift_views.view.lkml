@@ -542,7 +542,7 @@ view: redshift_tables {
         "sortkey1_enc"::varchar,
         "sortkey_num"::int,
         "size"::bigint,
-        "pct_used"::numeric,
+        "pct_used"::numeric(10,4),
         "unsorted"::numeric,
         "stats_off"::numeric,
         "tbl_rows"::bigint,
@@ -712,6 +712,11 @@ view: redshift_tables {
       description: "Size of the table(s), in 1 MB data blocks"
       type: sum
       sql: ${size} ;;
+    }
+    measure: total_percent_used {
+      description: "Total percent used by the tables"
+      type: sum
+      sql: ${pct_used} ;;
     }
 
   }
