@@ -1,35 +1,21 @@
 - dashboard: redshift_performance
   title: Redshift Performance
-  layout: grid
-  rows:
-    - elements: [query_time_histogram, longest_queries]
-      height: 300
-      
-    - elements: [modeling_header]
-      height: 100
-    - elements: [network_distribution_piechart,network_distribution_top_joins]
-      height: 300
-      
-    - elements: [capacity_header]
-      height: 100
-    - elements: [queries_and_queued_per_hour]
-      height: 300
-      
-
-  #filters:
+  layout: newspaper
   elements:
-  - name: query_time_histogram
-    title: "Query time histogram"
-    type: looker_column
+  - title: Query time histogram
+    name: Query time histogram
     model: redshift_model
     explore: redshift_queries
-    dimensions: [redshift_queries.time_executing_roundup5]
-    measures: [redshift_queries.count]
+    type: looker_column
+    fields:
+    - redshift_queries.time_executing_roundup5
+    - redshift_queries.count
     filters:
       redshift_queries.time_executing: not 0
-    sorts: [redshift_queries.time_executing_roundup5]
-    limit: '500'
-    column_limit: '50'
+    sorts:
+    - redshift_queries.time_executing_roundup5
+    limit: 500
+    column_limit: 50
     query_timezone: America/Los_Angeles
     stacking: ''
     show_value_labels: false
@@ -57,16 +43,25 @@
     point_style: none
     interpolation: linear
     series_types: {}
-
-  - name: longest_queries
-    title: "Top 10 longest running queries"
-    type: table
+    listen:
+      PDT: redshift_queries.pdt
+    row: 0
+    col: 0
+    width: 12
+    height: 6
+  - title: Top 10 longest running queries
+    name: Top 10 longest running queries
     model: redshift_model
     explore: redshift_queries
-    dimensions: [redshift_queries.query, redshift_queries.substring, redshift_queries.time_executing_roundup1]
-    sorts: [redshift_queries.time_executing_roundup1 desc]
-    limit: '10'
-    column_limit: '50'
+    type: table
+    fields:
+    - redshift_queries.query
+    - redshift_queries.snippet
+    - redshift_queries.time_executing_roundup1
+    sorts:
+    - redshift_queries.time_executing_roundup1 desc
+    limit: 10
+    column_limit: 50
     query_timezone: America/Los_Angeles
     show_view_names: false
     show_row_numbers: true
@@ -78,27 +73,35 @@
     series_labels:
       redshift_queries.time_executing_roundup1: Run time (seconds)
       redshift_queries.query: Query ID
-
-
-
-  - name: modeling_header
+    listen:
+      PDT: redshift_queries.pdt
+    row: 0
+    col: 12
+    width: 12
+    height: 6
+  - name: Modeling
     type: text
-    title_text: "Modeling"
-    subtitle_text: ""
-    body_text: ""
-    
-  - name: network_distribution_piechart
-    title: Network distribution breakdown
-    type: looker_pie
+    title_text: Modeling
+    subtitle_text: ''
+    body_text: ''
+    row: 6
+    col: 0
+    width: 24
+    height: 2
+  - title: Network distribution breakdown
+    name: Network distribution breakdown
     model: redshift_model
     explore: redshift_plan_steps
-    dimensions: [redshift_plan_steps.network_distribution_type]
-    measures: [redshift_queries.total_time_executing]
+    type: looker_pie
+    fields:
+    - redshift_plan_steps.network_distribution_type
+    - redshift_queries.total_time_executing
     filters:
       redshift_plan_steps.operation: "%Join%"
-    sorts: [redshift_queries.total_time_executing desc]
-    limit: '500'
-    column_limit: '50'
+    sorts:
+    - redshift_queries.total_time_executing desc
+    limit: 500
+    column_limit: 50
     query_timezone: America/Los_Angeles
     value_labels: labels
     label_type: labPer
@@ -111,26 +114,37 @@
     limit_displayed_rows: false
     series_types: {}
     series_colors:
-      DS_BCAST_INNER: "#d3271d"
-      DS_DIST_BOTH: "#fa6600"
-      DS_DIST_INNER: "#82c400"
-      DS_DIST_NONE: "#276300"
-      DS_DIST_ALL_INNER: "#5f00cf"
-      DS_DIST_ALL_NONE: "#1c8b19"
-    
-  - name: network_distribution_top_joins
-    title: Top Network Distribution Operations
-    type: table
+      DS_DIST_NONE: "#37ce12"
+      DS_DIST_ALL_NONE: "#17470c"
+      DS_DIST_INNER: "#5f7c58"
+      DS_DIST_OUTER: "#ff8828"
+      DS_DIST_BOTH: "#c13c07"
+      DS_BCAST_INNER: "#d6a400"
+      DS_DIST_ALL_INNER: "#9e0f62"
+    listen:
+      PDT: redshift_queries.pdt
+    row: 8
+    col: 0
+    width: 12
+    height: 6
+  - title: Top Network Distribution Operations
+    name: Top Network Distribution Operations
     model: redshift_model
     explore: redshift_plan_steps
-    dimensions: [redshift_plan_steps.network_distribution_type, redshift_plan_steps.operation_argument]
-    measures: [redshift_queries.count, redshift_queries.total_time_executing, redshift_queries.time_executing_per_query]
+    type: table
+    fields:
+    - redshift_plan_steps.network_distribution_type
+    - redshift_plan_steps.operation_argument
+    - redshift_queries.count
+    - redshift_queries.total_time_executing
+    - redshift_queries.time_executing_per_query
     filters:
       redshift_plan_steps.network_distribution_type: DS^_DIST^_OUTER,DS^_DIST^_ALL^_INNER,DS^_DIST^_BOTH,DS^_BCAST^_INNER
       redshift_plan_steps.operation: "%Join%"
-    sorts: [redshift_queries.total_time_executing desc]
-    limit: '50'
-    column_limit: '50'
+    sorts:
+    - redshift_queries.total_time_executing desc
+    limit: 50
+    column_limit: 50
     query_timezone: America/Los_Angeles
     show_view_names: false
     show_row_numbers: true
@@ -153,32 +167,44 @@
       show_hide: show
       first_last: first
       num_rows: '20'
-    
-    
-  - name: capacity_header
+    listen:
+      PDT: redshift_queries.pdt
+    row: 8
+    col: 12
+    width: 12
+    height: 6
+  - name: Capacity
     type: text
-    title_text: "Capacity"
-    subtitle_text: ""
-    body_text: ""
-    
-  - name: queries_and_queued_per_hour
-    title: Queries submitted & queued by hour
-    type: looker_line
+    title_text: Capacity
+    subtitle_text: ''
+    body_text: ''
+    row: 14
+    col: 0
+    width: 24
+    height: 2
+  - title: Queries submitted & queued by hour
+    name: Queries submitted & queued by hour
     model: redshift_model
     explore: redshift_queries
-    dimensions: [redshift_queries.start_hour]
-    fill_fields: [redshift_queries.start_hour]
-    measures: [redshift_queries.count, redshift_queries.count_of_queued, redshift_queries.percent_queued,
-      redshift_queries.total_time_in_queue]
+    type: looker_line
+    fields:
+    - redshift_queries.start_hour
+    - redshift_queries.count
+    - redshift_queries.count_of_queued
+    - redshift_queries.percent_queued
+    - redshift_queries.total_time_in_queue
+    fill_fields:
+    - redshift_queries.start_hour
+    sorts:
+    - redshift_queries.start_hour desc
+    limit: 500
+    column_limit: 50
     dynamic_fields:
     - table_calculation: minutes_queued
       label: Minutes Queued
       expression: "${redshift_queries.total_time_in_queue}/60"
       value_format:
       value_format_name: decimal_1
-    sorts: [redshift_queries.start_hour desc]
-    limit: '500'
-    column_limit: '50'
     query_timezone: America/Los_Angeles
     stacking: ''
     show_value_labels: false
@@ -208,12 +234,39 @@
     series_types:
       redshift_queries.count_of_queued: area
       minutes_queued: area
-    y_axis_labels: [Count, Queued, Minutes Queued]
-    y_axis_orientation: [left, left, right]
-    hidden_series: [minutes_queued]
-    hidden_fields: [redshift_queries.total_time_in_queue, redshift_queries.percent_queued]
-    colors: ['palette: Tomato to Steel Blue']
+    y_axis_labels:
+    - Count
+    - Queued
+    - Minutes Queued
+    y_axis_orientation:
+    - left
+    - left
+    - right
+    hidden_series:
+    - minutes_queued
+    hidden_fields:
+    - redshift_queries.total_time_in_queue
+    - redshift_queries.percent_queued
+    colors:
+    - 'palette: Tomato to Steel Blue'
     series_colors:
       minutes_queued: "#e0bc5e"
       redshift_queries.count: "#2f24b5"
       redshift_queries.count_of_queued: "#d10c04"
+    listen:
+      PDT: redshift_queries.pdt
+    row: 16
+    col: 0
+    width: 24
+    height: 6
+  filters:
+  - name: PDT
+    title: PDT
+    type: field_filter
+    default_value: ''
+    allow_multiple_values: true
+    required: false
+    model: redshift_model
+    explore: redshift_queries
+    listens_to_filters: []
+    field: redshift_queries.pdt

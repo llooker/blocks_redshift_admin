@@ -400,6 +400,32 @@
     totals_color: "#808080"
     series_types: {}
 
+  - name: Query Plan Costs
+    title: "Query Plan Costs"
+    height: 14
+    width: 32
+    model: redshift_model
+    explore: redshift_plan_steps
+    type: flamegraph # Ensure this matches the custom vis chart id in admin/visualizations
+    fields: [redshift_plan_steps.parent_step, redshift_plan_steps.step, redshift_plan_steps.step_description, redshift_plan_steps.step_cost]
+    listen:
+      query: redshift_plan_steps.query
+    sorts:
+    - redshift_plan_steps.step
+    limit: '2000'
+    column_limit: '50'
+    diameter: '100%'
+    stepwise_max_scale: 4
+    query_timezone: America/Los_Angeles
+    show_view_names: false
+    show_row_numbers: true
+    truncate_column_names: false
+    hide_totals: false
+    hide_row_totals: false
+    table_theme: editable
+    limit_displayed_rows: false
+    series_types: {}
+
   - name: plan_steps
     title: "Query Plan"
     height: 18

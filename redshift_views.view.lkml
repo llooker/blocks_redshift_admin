@@ -167,39 +167,52 @@ view: redshift_data_loads {
 }
 
 view: redshift_plan_steps {
-  #For recent queries based on redshift_queries
   #description: "Steps from the query planner for recent queries to Redshift"
   derived_table: {
     # Insert into PDT because redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
-    sql_trigger_value: SELECT FLOOR((EXTRACT(epoch from GETDATE()) - 60*60*23)/(60*60*24)) ;; #23h
-    sql:
-        SELECT
-        query, nodeid, parentid,
-        CASE WHEN plannode='SubPlan' THEN 'SubPlan'
-        ELSE substring(regexp_substr(plannode, 'XN( [A-Z][a-z]+)+'),4) END as operation,
-        substring(regexp_substr(plannode, 'DS_[A-Z_]+'),0) as network_distribution_type,
-        substring(info from 1 for 240) as operation_argument,
-        CASE
-          WHEN plannode NOT LIKE '% on %' THEN NULL
-          WHEN plannode LIKE '% on "%' THEN substring(regexp_substr(plannode,' on "[^"]+'),6)
-          ELSE substring(regexp_substr(plannode,' on [\._a-zA-Z0-9]+'),5)
-        END as "table",
-        RIGHT('0'||COALESCE(substring(regexp_substr(plannode,' rows=[0-9]+'),7),''),32)::decimal(38,0) as "rows",
-        RIGHT('0'||COALESCE(substring(regexp_substr(plannode,' width=[0-9]+'),8),''),32)::decimal(38,0) as width,
-        substring(regexp_substr(plannode,'\\(cost=[0-9]+'),7) as cost_lo,
-        substring(regexp_substr(plannode,'\\.\\.[0-9]+'),3) as cost_hi,
-        CASE
-          WHEN COALESCE(parentid,0)=0 THEN 'root'
-          WHEN nodeid = MAX(nodeid) OVER (PARTITION BY query,parentid) THEN 'inner'
-          ELSE 'outer'
-        END::CHAR(5) as inner_outer
-      FROM stl_explain
-      WHERE query>=(SELECT min(query) FROM ${redshift_queries.SQL_TABLE_NAME})
-        AND query<=(SELECT max(query) FROM ${redshift_queries.SQL_TABLE_NAME})
-    ;;
-    #TODO?: Currently not extracting the sequential scan column, but I'm not sure if this is useful to extract. What's more useful as far as I can tell are the fields in the filter (operation argument)
+    datagroup_trigger: nightly
     distribution: "query"
     sortkeys: ["query"]
+    sql:
+        WITH redshift_plan_steps AS
+          (SELECT
+            query, nodeid, parentid,
+            CASE WHEN plannode='SubPlan' THEN 'SubPlan'
+            ELSE substring(regexp_substr(plannode, 'XN( [A-Z][a-z]+)+'),4) END as operation,
+            substring(regexp_substr(plannode, 'DS_[A-Z_]+'),0) as network_distribution_type,
+            substring(info from 1 for 240) as operation_argument,
+            CASE
+              WHEN plannode NOT LIKE '% on %' THEN NULL
+              WHEN plannode LIKE '% on "%' THEN substring(regexp_substr(plannode,' on "[^"]+'),6)
+              ELSE substring(regexp_substr(plannode,' on [\._a-zA-Z0-9]+'),5)
+            END as "table",
+            RIGHT('0'||COALESCE(substring(regexp_substr(plannode,' rows=[0-9]+'),7),''),32)::decimal(38,0) as "rows",
+            RIGHT('0'||COALESCE(substring(regexp_substr(plannode,' width=[0-9]+'),8),''),32)::decimal(38,0) as width,
+            substring(regexp_substr(plannode,'\\(cost=[0-9]+'),7) as cost_lo_raw,
+            substring(regexp_substr(plannode,'\\.\\.[0-9]+'),3) as cost_hi_raw,
+            CASE
+              WHEN cost_hi_raw != '' THEN
+                ( CASE WHEN LEN(cost_hi_raw) > 18 THEN 999999999999999999::DECIMAL(38,0) ELSE cost_hi_raw::DECIMAL(38,0) END )
+              ELSE NULL END  as cost_hi_numeric,
+            CASE
+              WHEN COALESCE(parentid,0)=0 THEN 'root'
+              WHEN nodeid = MAX(nodeid) OVER (PARTITION BY query,parentid) THEN 'inner'
+              ELSE 'outer' END::CHAR(5) as inner_outer,
+            SUM(cost_hi_numeric) OVER (PARTITION by query,parentid) as sum_children_cost
+          FROM stl_explain
+          WHERE query>=(SELECT min(query) FROM ${redshift_queries.SQL_TABLE_NAME})
+            AND query<=(SELECT max(query) FROM ${redshift_queries.SQL_TABLE_NAME})
+          GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12)
+        SELECT
+          redshift_plan_steps.*,
+          redshift_plan_steps.cost_hi_numeric - COALESCE(x.sum_children_cost,0) AS incremental_step_cost
+        FROM redshift_plan_steps
+        LEFT JOIN (SELECT query, parentid, sum_children_cost FROM redshift_plan_steps GROUP BY 1,2,3) AS x
+          ON redshift_plan_steps.query = x.query AND redshift_plan_steps.nodeid = x.parentid
+        ORDER BY 1,3
+    ;;
+    #TODO?: Currently not extracting the sequential scan column, but I'm not sure if this is useful to extract. What's more useful as far as I can tell are the fields in the filter (operation argument)
+
   }
   dimension: query {
     sql: ${TABLE}.query;;
@@ -220,6 +233,15 @@ view: redshift_plan_steps {
   dimension: parent_step {
     type: number
     sql: ${TABLE}.parentid;;
+    hidden: yes
+  }
+  dimension: step_description {
+    description: "Concatenation of 'operation - network distribution type - table'"
+    sql: CASE WHEN COALESCE(${operation},'') = '' THEN '' ELSE ${operation} END ||
+           CASE WHEN COALESCE(${operation_argument},'') = '' THEN '' ELSE ' - ' || ${operation_argument} END ||
+           CASE WHEN COALESCE(${network_distribution_type},'') = '' THEN '' ELSE ' - ' || ${network_distribution_type} END ||
+           CASE WHEN COALESCE(${table},'') = '' THEN '' ELSE ' - ' || ${table} END ;;
+    type: "string"
     hidden: yes
   }
   dimension: operation {
@@ -253,18 +275,16 @@ view: redshift_plan_steps {
     description: "AWS Docs http://docs.aws.amazon.com/redshift/latest/dg/c_data_redistribution.html"
     sql: ${TABLE}.network_distribution_type ;;
     type: "string"
-    html:
-    {% if value == 'DS_DIST_ALL_INNER' or value == 'DS_BCAST_INNER' %}
-      <span style="color: darkred">{{ rendered_value }}</span>
-    {% elsif value == 'DS_DIST_BOTH' %}
-      <span style="color: darkorange">{{ rendered_value }}</span>
-    {% elsif value == 'DS_DIST_ALL_NONE' or value == 'DS_DIST_NONE'%}
-      <span style="color: green">{{ rendered_value }}</span>
-    {% else %}
-      {{ rendered_value }}
-    {% endif %}
+    html: <span style="color: {% if
+     value == 'DS_DIST_NONE' %} #37ce12 {% elsif
+     value == 'DS_DIST_ALL_NONE' %} #17470c {% elsif
+     value == 'DS_DIST_INNER' %} #5f7c58 {% elsif
+     value == 'DS_DIST_OUTER' %} #ff8828 {% elsif
+     value == 'DS_DIST_BOTH' %} #c13c07 {% elsif
+     value == 'DS_BCAST_INNER' %} #d6a400 {% elsif
+     value == 'DS_DIST_ALL_INNER' %} #9e0f62 {% else
+    %} black {% endif %}">{{ rendered_value }}</span>
     ;;
-    #DS_DIST_OUTER is not even in the AWS Docs...?
   }
   dimension: network_distribution_bytes {
     #TODO: Multiply by number of nodes if BCAST?
@@ -309,9 +329,31 @@ view: redshift_plan_steps {
     type: "string"
     sql: ${TABLE}.inner_outer ;;
   }
+  dimension: cost_lo_raw {
+    description: "Cumulative relative cost of returning the first row for this step"
+    type: string
+    sql: ${TABLE}.cost_lo_raw ;;
+    hidden: yes
+  }
+  dimension: cost_hi_raw {
+    description: "Cumulative relative cost of completing this step"
+    type: string
+    sql: ${TABLE}.cost_hi_raw ;;
+    hidden: yes
+  }
+  dimension: incremental_step_cost {
+    description: "Incremental relative cost of completing this step"
+    type: number
+    sql: ${TABLE}.incremental_step_cost ;;
+  }
   measure: count {
     type: count
     drill_fields: [query, parent_step, step, operation, operation_argument, network_distribution_type]
+  }
+  measure: step_cost {
+    type: sum
+    sql: ${incremental_step_cost} ;;
+    description: "Relative cost of completing steps"
   }
   measure: total_rows{
     label: "Total rows out"
@@ -346,42 +388,86 @@ view: redshift_plan_steps {
 }
 
 view: redshift_queries {
-  # Recent is last 24 hours of queries
-  # (we only see queries related to our rs user_id)
+  # Limited to last 24 hours of queries
   derived_table: {
-    sql_trigger_value: SELECT FLOOR((EXTRACT(epoch from GETDATE()) - 60*60*22)/(60*60*24)) ;; #22h
+    datagroup_trigger: nightly
+    distribution: "query"
+    sortkeys: ["query"]
     sql: SELECT
         wlm.query,
-        q.substring::varchar,
+        COALESCE(qlong.querytxt,q.substring)::varchar as text,
+        SUBSTRING(
+          REGEXP_REPLACE(COALESCE(qlong.querytxt,q.substring)::varchar,'^\\s*-- ([A-Za-z ]*''\\{[^}]*\\}''.|Building [^ ]+( in dev mode)? on instance [0-9a-f]+.)','')
+          ,1,100) as snippet,
+        CASE
+          WHEN COALESCE(qlong.querytxt,q.substring)::varchar NOT ILIKE '-- Building %'
+          THEN 'No'
+          WHEN COALESCE(qlong.querytxt,q.substring)::varchar ILIKE '% in dev mode on instance %'
+          THEN 'Dev'
+          ELSE 'Prod'
+          END as pdt,
+        REGEXP_SUBSTR(COALESCE(qlong.querytxt,q.substring)::varchar,'^\\s*-- [A-Za-z ]*''\\{[^}]*"user_id":(\\d+)',1,1,'e') as looker_user_id,
+        REGEXP_SUBSTR(COALESCE(qlong.querytxt,q.substring)::varchar,'^\\s*-- [A-Za-z ]*''\\{[^}]*"history_id":(\\d+)',1,1,'e') as looker_history_id,
+        REGEXP_SUBSTR(COALESCE(qlong.querytxt,q.substring)::varchar,'^\\s*-- [^}]*instance_?s?l?u?g?"?:?"? ?([0-9a-f]+)',1,1,'e') as looker_instance_slug,
         sc.name as service_class,
         --wlm.service_class as service_class, --Use if connection was not given access to STV_WLM_SERVICE_CLASS_CONFIG
         wlm.service_class_start_time as start_time,
         wlm.total_queue_time,
         wlm.total_exec_time,
-        q.elapsed, --Hmm.. this measure seems to be greater than queue_time+exec_time
-        COALESCE(qlong.querytxt,q.substring)::varchar as querytxt
+        q.elapsed --Hmm.. this measure seems to be greater than queue_time+exec_time
       FROM STL_WLM_QUERY wlm
       LEFT JOIN STV_WLM_SERVICE_CLASS_CONFIG sc ON sc.service_class=wlm.service_class -- Remove this line if access was not granted
       LEFT JOIN SVL_QLOG q on q.query=wlm.query
       LEFT JOIN STL_QUERY qlong on qlong.query=q.query
       WHERE wlm.service_class_start_time >= dateadd(day,-1,GETDATE())
       AND wlm.service_class_start_time <= GETDATE()
-      --WHERE wlm.query>=(SELECT MAX(query)-5000 FROM STL_WLM_QUERY)
     ;;
     #STL_QUERY vs SVL_QLOG. STL_QUERY has more characters of query text (4000), but is only retained for "2 to 5 days"
     # STL_WLM_QUERY or SVL_QUERY_QUEUE_INFO? http://docs.aws.amazon.com/redshift/latest/dg/r_SVL_QUERY_QUEUE_INFO.html
-    distribution: "query"
-    sortkeys: ["query"]
   }
+  #Looker Query Context '{"user_id":711,"history_id":38026310,"instance_slug":"186fb89f0c23199fffd36f1cdfb6152b"}
   dimension: query {
+    description: "Redshift's Query ID"
     type: number
-    sql: ${TABLE}.query ;;
     primary_key: yes
     link: {
       label: "Inspect"
       url: "/dashboards/redshift_model::redshift_query_inspection?query={{value}}"
     }
   }
+  dimension: text {
+    alias: [querytxt]
+  }
+  dimension: snippet {
+    alias: [substring]
+  }
+  dimension: looker_user_id {
+    group_label: "Looker Query Context"
+    type: number
+    link: {
+      label: "View in Looker Admin"
+      url: "/admin/users/{{value}}/edit"
+      # ^ Note that in scenarios with multiple Looker instances, this may not be the right link!
+    }
+  }
+  dimension: looker_history_id {
+    group_label: "Looker Query Context"
+    type: number
+    link: {
+      label: "View in Looker Admin"
+      url: "/admin/queries/{{value}}"
+      # ^ Note that in scenarios with multiple Looker instances, this may not be the right link!
+    }
+  }
+  dimension: looker_instance_slug {
+    group_label: "Looker Query Context"
+  }
+  dimension: pdt {
+    label: "Is PDT?"
+    group_label: "Looker Query Context"
+    description: "Either Prod, Dev, or No"
+  }
+
   dimension_group: start {
     type: time
     timeframes: [raw, minute,second, minute15, hour, hour_of_day, day_of_week, date]
@@ -443,21 +529,13 @@ view: redshift_queries {
     description: "Amount of time (from another table, for comparison...)"
     sql: ${TABLE}.elapsed / 1000000 ;;
   }
-  dimension: substring {
-    type: string
-    sql: ${TABLE}.substring ;;
-  }
-  dimension: text {
-    type: string
-    sql: ${TABLE}.querytxt ;;
-  }
   dimension:  was_queued {
     type: yesno
     sql: ${TABLE}.total_queue_time > 0;;
   }
   measure: count {
     type: count
-    drill_fields: [query, start_date, time_executing, substring]
+    drill_fields: [query, start_date, time_executing, pdt, looker_history_id, snippet ]
   }
   measure: count_of_queued {
     type: sum
@@ -500,11 +578,10 @@ view: redshift_slices {
   # Use the STV_SLICES table to view the current mapping of a slice to a node.
   # This table is visible to all users. Superusers can see all rows; regular users can see only their own data.
   derived_table: {
-    #sql_trigger_value: SELECT FLOOR((EXTRACT(epoch from GETDATE()) - 60*60*22)/(60*60*24)) ;; #22h
-    persist_for: "12 hours"
-    sql: SELECT slice,node FROM STV_SLICES;;
+    datagroup_trigger: nightly
     distribution_style: "all"
     sortkeys: ["node"]
+    sql: SELECT slice,node FROM STV_SLICES;;
   }
   dimension: node{
     type: number
@@ -528,8 +605,11 @@ view: redshift_slices {
 
 view: redshift_tables {
   derived_table: {
-    # Insert into PDT because redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
-    persist_for: "8 hours"
+    # Insert into PDT because Redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
+    datagroup_trigger: nightly
+    distribution_style: all
+    indexes: ["table_id","table"] # "indexes" translates to an interleaved sort key for Redshift
+    # http://docs.aws.amazon.com/redshift/latest/dg/r_SVV_TABLE_INFO.html
     sql: select
         "database"::varchar,
         "schema"::varchar,
@@ -542,7 +622,7 @@ view: redshift_tables {
         "sortkey1_enc"::varchar,
         "sortkey_num"::int,
         "size"::bigint,
-        "pct_used"::numeric(10,4),
+        "pct_used"::numeric,
         "unsorted"::numeric,
         "stats_off"::numeric,
         "tbl_rows"::bigint,
@@ -550,56 +630,98 @@ view: redshift_tables {
         "skew_rows"::numeric
       from svv_table_info
     ;;
-    # http://docs.aws.amazon.com/redshift/latest/dg/r_SVV_TABLE_INFO.html
-      distribution_style: all
-      indexes: ["table_id","table"] # "indexes" translates to an interleaved sort key for Redshift
     }
 
     # dimensions #
 
+    # Identifiers {
+    dimension: table_id {
+      group_label: " Identifiers"
+      description: "The table's internal/numeric ID"
+      type: number
+      sql: ${TABLE}.table_id ;;
+    }
+    dimension: path {
+      group_label: " Identifiers"
+      description: "Database + schema + table name"
+      sql: ${database}||'.'||${schema}||'.'||${table} ;;
+      primary_key: yes
+    }
     dimension: database {
+      group_label: " Identifiers"
       type: string
       sql: ${TABLE}.database ;;
     }
     dimension: schema {
+      group_label: " Identifiers"
       type: string
       sql: ${TABLE}.schema ;;
     }
-    dimension: table_id {
-      type: number
-      sql: ${TABLE}.table_id ;;
-    }
     dimension: table {
+      group_label: " Identifiers"
+      label: "Table Name"
+      description: "Local table name"
       type: string
       sql: ${TABLE}."table" ;;
     }
     dimension: table_join_key {
-        hidden:yes
-        type:string
-        sql: CASE WHEN ${schema}='looker_scratch'
-                THEN 'name:'||${table}
-                ELSE 'id:'||${table_id}
-             END ;;
-        #Because when PDTs get rebuilt, their ID changes, and showing the info about the current PDT is more useful than showing nothing
+      group_label: " Identifiers"
+      hidden:yes
+      type:string
+      sql: CASE WHEN ${schema}='looker_scratch'
+              THEN 'name:'||${table}
+              ELSE 'id:'||${table_id}
+           END ;;
+      #Because when PDTs get rebuilt, their ID changes, and showing the info about the current PDT is more useful than showing nothing
     }
-    dimension: id {
-      sql: ${database}||'.'||${schema}||'.'||${table} ;;
-      primary_key: yes
-      hidden: yes
+    #}
+
+    # Size (Table) {
+    dimension: rows_in_table {
+      group_label: "Size (Table)"
+      type: number
+      sql: ${TABLE}.tbl_rows ;;
     }
+    dimension: size {
+      group_label: "Size (Table)"
+      description: "Size of the table, in 1 MB data blocks"
+      type: number
+      sql: ${TABLE}.size ;;
+    }
+    dimension: pct_used {
+      group_label: "Size (Table)"
+      label: "Percentage used"
+      type: number
+      description: "Percent of available space that is used by the table"
+      sql: ${TABLE}.pct_used ;;
+    }
+    #}
+
+    # Size (Columns) {
     dimension: encoded {
+      group_label: "Size (Columns)"
       description: "Whether any column has compression encoding defined"
       type: yesno
       sql: case ${TABLE}.encoded
-        when 'Y'
-        then true
-        when 'N'
-        then false
-        else null
-      end
-       ;;
+          when 'Y'
+          then true
+          when 'N'
+          then false
+          else null
+        end
+         ;;
     }
+    dimension: max_varchar {
+      group_label: "Size (Columns)"
+      description: "Size of the largest column that uses a VARCHAR data type"
+      type: number
+      sql: ${TABLE}.max_varchar ;;
+    }
+    #}
+
+    # Distribution {
     dimension: distribution_style {
+      group_label: "Distribution"
       type: string
       sql: ${TABLE}.diststyle ;;
       html:
@@ -612,56 +734,66 @@ view: redshift_tables {
           {% endif %}
           ;;
     }
+    dimension: skew_rows {
+      group_label: "Distribution"
+      description: "Ratio of the number of rows in the slice with the most rows to the number of rows in the slice with the fewest rows"
+      type: number
+      sql: ${TABLE}.skew_rows ;;
+      html:
+              {% if value >= 75 %}
+                <span style="color:darkred">{{ rendered_value }}</span>
+              {% elsif value >= 25 %}
+                <span style="color:darkorange">{{ rendered_value }}</span>
+              {% else value >= 75 %}
+                {{ rendered_value }}
+              {% endif %}
+        ;;
+    }
+    #}
 
+    # Sorting {
     dimension: sortkey {
+      group_label: "Sorting"
       description: "First sort key"
       type: string
       sql: ${TABLE}.sortkey1 ;;
     }
-
-    dimension: max_varchar {
-      description: "Size of the largest column that uses a VARCHAR data type"
-      type: number
-      sql: ${TABLE}.max_varchar ;;
-    }
-
     dimension: sortkey_encoding {
+      group_label: "Sorting"
       description: "Compression encoding of the first column in the sort key, if a sort key is defined"
       type: string
       sql: ${TABLE}.sortkey1_enc ;;
     }
-
     dimension: number_of_sortkeys {
+      group_label: "Sorting"
       type: number
       sql: ${TABLE}.sortkey_num ;;
     }
-    dimension: size {
-      label: "Size"
-      description: "Size of the table, in 1 MB data blocks"
-      type: number
-      sql: ${TABLE}.size ;;
-    }
-    dimension: pct_used {
-      type: number
-      description: "Percent of available space that is used by the table"
-      sql: ${TABLE}.pct_used ;;
-    }
     dimension: unsorted {
+      group_label: "Sorting"
       description: "Percent of unsorted rows in the table"
       type: number
       sql: ${TABLE}.unsorted ;;
       html:
-      {% if value >= 50 %}
-        <span style="color: darkred">{{ rendered_value }}</span>
-      {% elsif value >= 10 %}
-        <span style="color: darkorange">{{ rendered_value }}</span>
-      {% elsif value < 10 %}
-        <span style="color: green">{{ rendered_value }}</span>
-      {% else %}
-        {{ rendered_value }}
-      {% endif %}
-    ;;
+        {% if value >= 50 %}
+          <span style="color: darkred">{{ rendered_value }}</span>
+        {% elsif value >= 10 %}
+          <span style="color: darkorange">{{ rendered_value }}</span>
+        {% elsif value < 10 %}
+          <span style="color: green">{{ rendered_value }}</span>
+        {% else %}
+          {{ rendered_value }}
+        {% endif %}
+      ;;
     }
+    dimension: skew_sortkey {
+      group_label: "Sorting"
+      description: "Ratio of the size of the largest non-sort key column to the size of the first column of the sort key, if a sort key is defined. Use this value to evaluate the effectiveness of the sort key"
+      type: number
+      sql: ${TABLE}.skew_sortkey1 ;;
+    }
+    #}
+
     dimension: stats_off {
       description: "Number that indicates how stale the table's statistics are; 0 is current, 100 is out of date"
       type: number
@@ -678,29 +810,6 @@ view: redshift_tables {
       {% endif %}
     ;;
     }
-    dimension: rows_in_table {
-      type: number
-      sql: ${TABLE}.tbl_rows ;;
-    }
-    dimension: skew_sortkey {
-      description: "Ratio of the size of the largest non-sort key column to the size of the first column of the sort key, if a sort key is defined. Use this value to evaluate the effectiveness of the sort key"
-      type: number
-      sql: ${TABLE}.skew_sortkey1 ;;
-    }
-    dimension: skew_rows {
-      description: "Ratio of the number of rows in the slice with the most rows to the number of rows in the slice with the fewest rows"
-      type: number
-      sql: ${TABLE}.skew_rows ;;
-      html:
-            {% if value >= 75 %}
-              <span style="color:darkred">{{ rendered_value }}</span>
-            {% elsif value >= 25 %}
-              <span style="color:darkorange">{{ rendered_value }}</span>
-            {% else value >= 75 %}
-              {{ rendered_value }}
-            {% endif %}
-      ;;
-    }
     measure: count {
       type: count
     }
@@ -713,12 +822,6 @@ view: redshift_tables {
       type: sum
       sql: ${size} ;;
     }
-    measure: total_percent_used {
-      description: "Total percent used by the tables"
-      type: sum
-      sql: ${pct_used} ;;
-    }
-
   }
 
 view: redshift_query_execution {
@@ -726,7 +829,9 @@ view: redshift_query_execution {
   #description: "Steps from the query planner for recent queries to Redshift"
   derived_table: {
     # Insert into PDT because redshift won't allow joining certain system tables/views onto others (presumably because they are located only on the leader node)
-    sql_trigger_value: SELECT FLOOR((EXTRACT(epoch from GETDATE()) - 60*60*23)/(60*60*24)) ;; #23h
+    datagroup_trigger: nightly
+    distribution: "query"
+    sortkeys: ["query"]
     sql:
         SELECT
           query ||'.'|| seg || '.' || step as id,
@@ -761,8 +866,6 @@ view: redshift_query_execution {
         AND query<=(SELECT max(query) FROM ${redshift_queries.SQL_TABLE_NAME})
         GROUP BY query, seg, step, label
       ;;
-      distribution: "query"
-      sortkeys: ["query"]
     }
   # or svl_query_report to not aggregate over slices under each step
   #using group by because sometimes steps are duplicated.seems to be when some slices are diskbased, others not
@@ -880,7 +983,7 @@ view: redshift_query_execution {
     sql: MAX(${was_diskbased}) ;;
     html:
       {% if value == 'Yes' %}
-      <span style="color: darkred">{{ rendered_value }}</span>
+      <span style="color: darkred; font-weight:bold">{{ rendered_value }}</span>
       {% elsif value == 'No' %}
       <span style="color: green">{{ rendered_value }}</span>
       {% else %}
