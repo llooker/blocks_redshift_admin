@@ -1,0 +1,7 @@
+#Instead of copying the entire repo into a project, you can just use a project import like the one below
+project_name: "local_name_of_your_choice"
+
+remote_dependency: redshift_block {
+  url: "git://github.com/llooker/blocks_redshift_admin.git"
+  #ref: "caec6c02c89b8920b5017053a526b994b426e8e7"
+}
