@@ -617,7 +617,7 @@ view: redshift_tables {
         "table"::varchar,
         "encoded"::varchar,
         "diststyle"::varchar,
-        REGEXP_REPLACE("sortkey1", '[^ -~]', '?')::varchar,
+        REGEXP_REPLACE("sortkey1", '[^ -~]', '?')::varchar as "sortkey1",
         "max_varchar"::bigint,
         "sortkey1_enc"::varchar,
         "sortkey_num"::int,
