@@ -29,6 +29,7 @@
     - **Existing Project** - Make sure that other models do not contain include: "*.dashboard.lkml", as these will attempt to include the Redshift dashboards into existing models in which they do not make sense and will cause errors.
 
 * **Connection and Permission**
+    - Prerequisite: Ensure Looker is able to use its temp schema, according to our [Standard Redshift connection instructions](https://docs.looker.com/setup-and-management/database-config/amazon-redshift#temp_schema_setup)
     - [Grant](http://docs.aws.amazon.com/redshift/latest/dg/r_GRANT.html) the SELECT privilege on:
       - [STV_WLM_SERVICE_CLASS_CONFIG](http://docs.aws.amazon.com/redshift/latest/dg/r_STV_WLM_SERVICE_CLASS_CONFIG.html)
       - [SVV_TABLE_INFO](http://docs.aws.amazon.com/redshift/latest/dg/r_SVV_TABLE_INFO.html)
