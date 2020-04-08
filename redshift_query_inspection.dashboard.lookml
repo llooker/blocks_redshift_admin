@@ -73,7 +73,7 @@
       query: redshift_query_execution.query
     limit: '500'
     column_limit: '50'
-    query_timezone: America/Los_Angeles
+    query_timezone: Europe/Paris
     custom_color_enabled: false
     custom_color: forestgreen
     show_single_value_title: true
@@ -121,7 +121,7 @@
     sorts: [redshift_queries.text]
     limit: '500'
     column_limit: '50'
-    query_timezone: America/Los_Angeles
+    query_timezone: Europe/Paris
     show_view_names: false
     show_row_numbers: false
     truncate_column_names: true
@@ -217,7 +217,7 @@
       query: redshift_query_execution.query
     limit: '500'
     column_limit: '50'
-    query_timezone: America/Los_Angeles
+    query_timezone: Europe/Paris
     custom_color_enabled: false
     custom_color: forestgreen
     show_single_value_title: true
@@ -265,7 +265,7 @@
       query: redshift_query_execution.query
     limit: '500'
     column_limit: '50'
-    query_timezone: America/Los_Angeles
+    query_timezone: Europe/Paris
     custom_color_enabled: false
     custom_color: forestgreen
     show_single_value_title: true
@@ -315,7 +315,7 @@
       query: redshift_query_execution.query
     limit: '500'
     column_limit: '50'
-    query_timezone: America/Los_Angeles
+    query_timezone: Europe/Paris
     custom_color_enabled: false
     custom_color: forestgreen
     show_single_value_title: true
@@ -370,7 +370,7 @@
     sorts: [redshift_query_execution.total_bytes_scanned desc]
     limit: '40'
     column_limit: '50'
-    query_timezone: America/Los_Angeles
+    query_timezone: Europe/Paris
     show_view_names: true
     show_row_numbers: true
     truncate_column_names: false
@@ -416,7 +416,7 @@
     column_limit: '50'
     diameter: '100%'
     stepwise_max_scale: 4
-    query_timezone: America/Los_Angeles
+    query_timezone: Europe/Paris
     show_view_names: false
     show_row_numbers: true
     truncate_column_names: false
@@ -441,7 +441,7 @@
     sorts: [redshift_plan_steps.step]
     limit: '2000'
     column_limit: '50'
-    query_timezone: America/Los_Angeles
+    query_timezone: Europe/Paris
     show_view_names: false
     show_row_numbers: true
     truncate_column_names: false
@@ -465,7 +465,7 @@
     sorts: [redshift_query_execution.step]
     limit: '500'
     column_limit: '50'
-    query_timezone: America/Los_Angeles
+    query_timezone: Europe/Paris
     show_view_names: false
     show_row_numbers: true
     truncate_column_names: false
