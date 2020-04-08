@@ -9,7 +9,7 @@ include: "redshift_*.dashboard"
 include: "redshift_*.view"
 
 datagroup: nightly {
-  sql_trigger: SELECT TIMEZONE('US/Pacific',GETDATE())::DATE;;
+  sql_trigger: SELECT CONVERT_TIMEZONE('Europe/Paris',GETDATE())::DATE;;
 }
 
 persist_with: nightly
