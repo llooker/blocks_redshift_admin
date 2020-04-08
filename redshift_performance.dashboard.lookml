@@ -16,7 +16,7 @@
     - redshift_queries.time_executing_roundup5
     limit: 500
     column_limit: 50
-    query_timezone: America/Los_Angeles
+    query_timezone: Europe/Paris
     stacking: ''
     show_value_labels: false
     label_density: 25
@@ -62,7 +62,7 @@
     - redshift_queries.time_executing_roundup1 desc
     limit: 10
     column_limit: 50
-    query_timezone: America/Los_Angeles
+    query_timezone: Europe/Paris
     show_view_names: false
     show_row_numbers: true
     truncate_column_names: false
@@ -102,7 +102,7 @@
     - redshift_queries.total_time_executing desc
     limit: 500
     column_limit: 50
-    query_timezone: America/Los_Angeles
+    query_timezone: Europe/Paris
     value_labels: labels
     label_type: labPer
     show_view_names: false
@@ -145,7 +145,7 @@
     - redshift_queries.total_time_executing desc
     limit: 50
     column_limit: 50
-    query_timezone: America/Los_Angeles
+    query_timezone: Europe/Paris
     show_view_names: false
     show_row_numbers: true
     truncate_column_names: false
@@ -205,7 +205,7 @@
       expression: "${redshift_queries.total_time_in_queue}/60"
       value_format:
       value_format_name: decimal_1
-    query_timezone: America/Los_Angeles
+    query_timezone: Europe/Paris
     stacking: ''
     show_value_labels: false
     label_density: 25
