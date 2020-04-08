@@ -1,7 +1,7 @@
 # # https://github.com/llooker/blocks_redshift_admin
 # #
 # # Make sure this is a connection where the database user has sufficient permissions (per above link)
-connection: "meta"
+connection: "redshift"
 
 case_sensitive: no
 
